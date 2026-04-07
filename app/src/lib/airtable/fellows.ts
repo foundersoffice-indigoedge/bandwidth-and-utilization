@@ -10,12 +10,12 @@ export async function fetchEligibleFellows(): Promise<Fellow[]> {
   });
 
   return records
-    .filter(r => ELIGIBLE_DESIGNATIONS.includes(r.fields['Designation'] as string))
+    .filter(r => ELIGIBLE_DESIGNATIONS.includes(r.fields['Designation of Fellow'] as string))
     .map(r => ({
       recordId: r.id,
-      name: r.fields['Name'] as string,
-      email: r.fields['Email'] as string,
-      designation: r.fields['Designation'] as string,
+      name: r.fields['Name of Fellow'] as string,
+      email: r.fields['Email ID of Fellow'] as string,
+      designation: r.fields['Designation of Fellow'] as string,
       capacityMeu: Number(r.fields['Capacity [MEU]']) || 3.0,
     }));
 }

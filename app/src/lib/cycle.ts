@@ -9,7 +9,7 @@ import { sumMeu, calculateUtilization, getLoadTag } from '@/lib/utilization';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
 export { isCycleMonday } from '@/lib/schedule';
 
-export async function startCycle(): Promise<string> {
+export async function startCycle(testFellowIds?: string[]): Promise<string> {
   const today = new Date();
   const startDate = today.toISOString().split('T')[0];
 
@@ -18,7 +18,10 @@ export async function startCycle(): Promise<string> {
     .values({ startDate })
     .returning();
 
-  const fellows = await fetchEligibleFellows();
+  let fellows = await fetchEligibleFellows();
+  if (testFellowIds && testFellowIds.length > 0) {
+    fellows = fellows.filter(f => testFellowIds.includes(f.recordId));
+  }
   const allProjects = await fetchAllProjects();
 
   for (const fellow of fellows) {
@@ -81,6 +84,8 @@ async function finalizeCycle(cycleId: string): Promise<void> {
 
   const fellows = await fetchEligibleFellows();
   const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
+  const allProjects = await fetchAllProjects();
+  const projectMap = new Map(allProjects.map(p => [p.projectRecordId, p]));
   const failures: Array<{ projectName: string; error: string }> = [];
 
   // Group self-report submissions by project for Airtable write-back
@@ -96,11 +101,12 @@ async function finalizeCycle(cycleId: string): Promise<void> {
   let projectCount = 0;
   for (const [projectRecordId, subs] of projectSubmissions) {
     const firstSub = subs[0];
+    const projectData = projectMap.get(projectRecordId);
     const entries = subs.map(s => ({
       fellowName: fellowMap.get(s.fellowRecordId)?.name || s.fellowRecordId,
       score: s.autoScore,
       hoursPerDay: s.hoursPerDay,
-      stage: '',
+      stage: projectData?.stage || '',
     }));
 
     const narrative = generateNarrative(

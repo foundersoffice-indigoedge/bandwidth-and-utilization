@@ -8,8 +8,9 @@ export async function GET(req: NextRequest) {
   }
 
   const today = new Date();
+  const force = req.nextUrl.searchParams.get('force') === 'true';
 
-  if (!isCycleMonday(today)) {
+  if (!force && !isCycleMonday(today)) {
     return NextResponse.json({ message: 'Not a cycle Monday, skipping' });
   }
 
@@ -18,6 +19,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'Cycle already active, skipping' });
   }
 
-  const cycleId = await startCycle();
-  return NextResponse.json({ message: 'Cycle started', cycleId });
+  const fellowsParam = req.nextUrl.searchParams.get('fellows');
+  const testFellowIds = fellowsParam ? fellowsParam.split(',') : undefined;
+
+  const cycleId = await startCycle(testFellowIds);
+  return NextResponse.json({ message: 'Cycle started', cycleId, testMode: !!testFellowIds });
 }
