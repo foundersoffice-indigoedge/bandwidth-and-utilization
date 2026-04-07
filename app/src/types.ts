@@ -2,6 +2,8 @@ export type ProjectType = 'mandate' | 'dde' | 'pitch';
 export type HoursUnit = 'per_day' | 'per_week';
 export type LoadTag = 'Free' | 'Comfortable' | 'Busy' | 'At Capacity' | 'Overloaded';
 export type TokenStatus = 'pending' | 'submitted' | 'not_needed';
+export type CycleStatus = 'collecting' | 'complete';
+export type ConflictStatus = 'pending' | 'resolved';
 export type ConflictResolution = 'vp_number' | 'associate_number' | 'custom';
 
 export interface Fellow {

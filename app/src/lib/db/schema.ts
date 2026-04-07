@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, date, timestamp, real, integer, boolean, jsonb } from 'drizzle-orm/pg-core';
+import type { ProjectBreakdownItem } from '@/types';
 
 export const cycles = pgTable('cycles', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -61,6 +62,6 @@ export const snapshots = pgTable('snapshots', {
   totalMeu: real('total_meu').notNull(),
   utilizationPct: real('utilization_pct').notNull(),
   loadTag: text('load_tag').notNull(),
-  projectBreakdown: jsonb('project_breakdown').notNull(),
+  projectBreakdown: jsonb('project_breakdown').$type<ProjectBreakdownItem[]>().notNull(),
   snapshotDate: date('snapshot_date').notNull(),
 });
