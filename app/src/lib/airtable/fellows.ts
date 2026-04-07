@@ -1,0 +1,25 @@
+import { fetchAllRecords } from './client';
+import { FELLOWS_TABLE_ID } from './config';
+import type { Fellow } from '@/types';
+
+const ELIGIBLE_DESIGNATIONS = ['VP', 'AVP', 'Associate 3', 'Associate 2', 'Associate 1'];
+
+export async function fetchEligibleFellows(): Promise<Fellow[]> {
+  const records = await fetchAllRecords(FELLOWS_TABLE_ID, {
+    filterByFormula: "AND({Current Employee} = 'Yes', {Team} = 'Investment Banking')",
+  });
+
+  return records
+    .filter(r => ELIGIBLE_DESIGNATIONS.includes(r.fields['Designation'] as string))
+    .map(r => ({
+      recordId: r.id,
+      name: r.fields['Name'] as string,
+      email: r.fields['Email'] as string,
+      designation: r.fields['Designation'] as string,
+      capacityMeu: Number(r.fields['Capacity [MEU]']) || 3.0,
+    }));
+}
+
+export function isVpOrAvp(designation: string): boolean {
+  return designation === 'VP' || designation === 'AVP';
+}
