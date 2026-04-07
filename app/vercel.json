@@ -1,0 +1,13 @@
+{
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/start-cycle",
+      "schedule": "30 3 * * 1"
+    },
+    {
+      "path": "/api/cron/send-reminders",
+      "schedule": "30 3 * * 2-5"
+    }
+  ]
+}
