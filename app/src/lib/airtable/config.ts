@@ -9,6 +9,8 @@ export const TABLE_CONFIG: Record<ProjectType, {
   vpAvpFields: string[];
   associateFields: string[];
   bandwidthField: string;
+  activeStages: string[];
+  label: string;
 }> = {
   mandate: {
     tableId: 'tblETYHFy9FnXG9TH',
@@ -17,6 +19,16 @@ export const TABLE_CONFIG: Record<ProjectType, {
     vpAvpFields: ['Mandate VP / AVP 1', 'Mandate VP / AVP 2'],
     associateFields: ['Mandate Associate 1', 'Mandate Associate 2'],
     bandwidthField: 'Mandate Bandwidth Situation',
+    activeStages: [
+      'Not Started',
+      'In Production',
+      'In GTM',
+      'In Docs',
+      'Closing',
+      'Term Sheet Signed',
+      'DD Started',
+    ],
+    label: 'Mandates',
   },
   dde: {
     tableId: 'tblxyEcXA5piBJKyP',
@@ -25,6 +37,11 @@ export const TABLE_CONFIG: Record<ProjectType, {
     vpAvpFields: ['DDE VP / AVP'],
     associateFields: ['DDE Associate'],
     bandwidthField: 'DDE Bandwidth Situation',
+    activeStages: [
+      'Not Started',
+      'DDE In Progress',
+    ],
+    label: 'DDEs',
   },
   pitch: {
     tableId: 'tblOMIyzJZYUMrJ2N',
@@ -33,5 +50,10 @@ export const TABLE_CONFIG: Record<ProjectType, {
     vpAvpFields: ['Pitch VP / AVP', 'Pitch VP / AVP 2'],
     associateFields: ['Pitch Associate 1', 'Pitch Associate 2'],
     bandwidthField: 'Pitch Bandwidth Situation',
+    activeStages: [
+      'Pitch Work in Progress',
+      'Pitch Done - Awaiting Outcome',
+    ],
+    label: 'Pitches',
   },
 };

@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import type { ProjectAssignment, Fellow } from '@/types';
+import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
@@ -20,6 +20,36 @@ function formatDateRange(startDate: string): string {
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
+const TYPE_ORDER: { type: ProjectType; label: string }[] = [
+  { type: 'mandate', label: 'Mandates' },
+  { type: 'dde', label: 'DDEs' },
+  { type: 'pitch', label: 'Pitches' },
+];
+
+function buildGroupedProjectsHtml(projects: ProjectAssignment[]): string {
+  const grouped = new Map<ProjectType, ProjectAssignment[]>();
+  for (const p of projects) {
+    const list = grouped.get(p.projectType) || [];
+    list.push(p);
+    grouped.set(p.projectType, list);
+  }
+
+  return TYPE_ORDER
+    .filter(({ type }) => grouped.has(type))
+    .map(({ type, label }) => {
+      const rows = grouped.get(type)!
+        .map(p => `<tr><td style="padding:8px;border:1px solid #e5e7eb">${p.projectName}</td><td style="padding:8px;border:1px solid #e5e7eb;color:#6b7280">${p.stage}</td></tr>`)
+        .join('');
+      return `
+        <p style="font-weight:600;font-size:15px;margin:20px 0 8px;color:#1f2937">${label}</p>
+        <table style="border-collapse:collapse;width:100%;margin-bottom:4px">
+          <tr style="background:#f3f4f6"><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;font-size:13px">Project</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;font-size:13px">Stage</th></tr>
+          ${rows}
+        </table>`;
+    })
+    .join('');
+}
+
 // --- Collection Email ---
 export async function sendCollectionEmail(
   fellow: Fellow,
@@ -28,9 +58,7 @@ export async function sendCollectionEmail(
   cycleStartDate: string
 ) {
   const dateRange = formatDateRange(cycleStartDate);
-  const projectRows = projects
-    .map(p => `<tr><td style="padding:8px;border:1px solid #ddd">${p.projectName}</td><td style="padding:8px;border:1px solid #ddd">${p.projectType.toUpperCase()}</td><td style="padding:8px;border:1px solid #ddd">${p.stage}</td></tr>`)
-    .join('');
+  const sectionsHtml = buildGroupedProjectsHtml(projects);
 
   await resend.emails.send({
     from,
@@ -39,11 +67,8 @@ export async function sendCollectionEmail(
     html: `
       <p>Hi ${fellow.name},</p>
       <p>Please submit your bandwidth update for the current cycle (${dateRange}).</p>
-      <table style="border-collapse:collapse;width:100%;margin:16px 0">
-        <tr style="background:#f3f4f6"><th style="padding:8px;border:1px solid #ddd;text-align:left">Project</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Type</th><th style="padding:8px;border:1px solid #ddd;text-align:left">Stage</th></tr>
-        ${projectRows}
-      </table>
-      <a href="${process.env.APP_URL}/submit/${token}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Submit Your Bandwidth</a>
+      ${sectionsHtml}
+      <a href="${process.env.APP_URL}/submit/${token}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin-top:16px">Submit Your Bandwidth</a>
     `,
   });
 }

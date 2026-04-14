@@ -23,6 +23,12 @@ interface HoursEntry {
   hoursUnit: 'per_day' | 'per_week';
 }
 
+const TYPE_SECTIONS: { type: string; label: string }[] = [
+  { type: 'mandate', label: 'Mandates' },
+  { type: 'dde', label: 'DDEs' },
+  { type: 'pitch', label: 'Pitches' },
+];
+
 export function SubmissionForm({
   token,
   fellowName,
@@ -98,38 +104,50 @@ export function SubmissionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
-      {projects.map(project => (
-        <div key={project.projectRecordId} className="border rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <h2 className="text-lg font-semibold">{project.projectName}</h2>
-            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded uppercase">
-              {project.projectType}
-            </span>
-            {project.stage && (
-              <span className="text-xs text-gray-500">{project.stage}</span>
-            )}
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-10">
+      {TYPE_SECTIONS.map(({ type, label }) => {
+        const group = projects.filter(p => p.projectType === type);
+        if (group.length === 0) return null;
+        return (
+          <section key={type}>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-lg font-bold text-gray-800">{label}</h2>
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400">{group.length} project{group.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="space-y-4">
+              {group.map(project => (
+                <div key={project.projectRecordId} className="border rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="text-base font-semibold">{project.projectName}</h3>
+                    {project.stage && (
+                      <span className="text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded">{project.stage}</span>
+                    )}
+                  </div>
 
-          <HoursInput
-            label={`Your bandwidth (${fellowName})`}
-            entry={entries[`${project.projectRecordId}:self`]}
-            onChange={(field, val) => update(`${project.projectRecordId}:self`, field, val)}
-          />
+                  <HoursInput
+                    label={`Your bandwidth (${fellowName})`}
+                    entry={entries[`${project.projectRecordId}:self`]}
+                    onChange={(field, val) => update(`${project.projectRecordId}:self`, field, val)}
+                  />
 
-          {isVp &&
-            project.associates.map(assoc => (
-              <HoursInput
-                key={assoc.recordId}
-                label={assoc.name}
-                entry={entries[`${project.projectRecordId}:${assoc.recordId}`]}
-                onChange={(field, val) =>
-                  update(`${project.projectRecordId}:${assoc.recordId}`, field, val)
-                }
-              />
-            ))}
-        </div>
-      ))}
+                  {isVp &&
+                    project.associates.map(assoc => (
+                      <HoursInput
+                        key={assoc.recordId}
+                        label={assoc.name}
+                        entry={entries[`${project.projectRecordId}:${assoc.recordId}`]}
+                        onChange={(field, val) =>
+                          update(`${project.projectRecordId}:${assoc.recordId}`, field, val)
+                        }
+                      />
+                    ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       <div>
         <label className="block text-sm font-medium mb-1">Remarks (optional)</label>

@@ -10,28 +10,33 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
       const cfg = TABLE_CONFIG[type];
       const records = await fetchAllRecords(cfg.tableId);
 
-      return records.map((r): ProjectAssignment => {
-        const vpAvpIds: string[] = [];
-        for (const field of cfg.vpAvpFields) {
-          const ids = r.fields[field] as string[] | undefined;
-          if (ids?.length) vpAvpIds.push(...ids);
-        }
+      return records
+        .filter(r => {
+          const stage = (r.fields[cfg.stageField] as string) || '';
+          return cfg.activeStages.includes(stage);
+        })
+        .map((r): ProjectAssignment => {
+          const vpAvpIds: string[] = [];
+          for (const field of cfg.vpAvpFields) {
+            const ids = r.fields[field] as string[] | undefined;
+            if (ids?.length) vpAvpIds.push(...ids);
+          }
 
-        const associateIds: string[] = [];
-        for (const field of cfg.associateFields) {
-          const ids = r.fields[field] as string[] | undefined;
-          if (ids?.length) associateIds.push(...ids);
-        }
+          const associateIds: string[] = [];
+          for (const field of cfg.associateFields) {
+            const ids = r.fields[field] as string[] | undefined;
+            if (ids?.length) associateIds.push(...ids);
+          }
 
-        return {
-          projectRecordId: r.id,
-          projectName: r.fields[cfg.nameField] as string,
-          projectType: type,
-          stage: (r.fields[cfg.stageField] as string) || '',
-          vpAvpIds,
-          associateIds,
-        };
-      });
+          return {
+            projectRecordId: r.id,
+            projectName: r.fields[cfg.nameField] as string,
+            projectType: type,
+            stage: (r.fields[cfg.stageField] as string) || '',
+            vpAvpIds,
+            associateIds,
+          };
+        });
     })
   );
 
