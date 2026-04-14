@@ -1,0 +1,461 @@
+'use client';
+
+import { useState } from 'react';
+import type { SnapshotData } from './page';
+import type { ProjectBreakdownItem } from '@/types';
+
+const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+
+function getLoadColor(tag: string): string {
+  switch (tag) {
+    case 'Free':
+    case 'Comfortable':
+      return 'bg-green-100 text-green-800';
+    case 'Busy':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'At Capacity':
+      return 'bg-orange-100 text-orange-800';
+    case 'Overloaded':
+      return 'bg-red-100 text-red-800';
+    default:
+      return '';
+  }
+}
+
+const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  mandate: { label: 'Mandate', color: 'text-blue-700' },
+  dde: { label: 'DDE', color: 'text-teal-700' },
+  pitch: { label: 'Pitch', color: 'text-violet-700' },
+};
+
+/** Map a snapshot date to the IY month index (Jul=0, Aug=1, ... Jun=11). */
+function toMonthIdx(dateStr: string): number {
+  const d = new Date(dateStr);
+  return (d.getMonth() + 6) % 12;
+}
+
+/**
+ * For a given calendar month + year, define 4 week ranges.
+ * Week 1 = days 1-7, Week 2 = 8-14, Week 3 = 15-21, Week 4 = 22-end.
+ * Returns [start, end] date strings for each week.
+ */
+function getWeekRanges(monthIdx: number, iy: number): { label: string; start: Date; end: Date }[] {
+  // Convert IY month index back to real month/year
+  const realMonth = (monthIdx + 6) % 12; // Jul(idx=0) → month 6, Jan(idx=6) → month 0
+  const year = monthIdx < 6 ? iy - 1 : iy; // Jul-Dec → iy-1, Jan-Jun → iy
+
+  const daysInMonth = new Date(year, realMonth + 1, 0).getDate();
+
+  return [
+    { label: 'Week 1 (1–7)', start: new Date(year, realMonth, 1), end: new Date(year, realMonth, 7, 23, 59, 59) },
+    { label: 'Week 2 (8–14)', start: new Date(year, realMonth, 8), end: new Date(year, realMonth, 14, 23, 59, 59) },
+    { label: 'Week 3 (15–21)', start: new Date(year, realMonth, 15), end: new Date(year, realMonth, 21, 23, 59, 59) },
+    { label: `Week 4 (22–${daysInMonth})`, start: new Date(year, realMonth, 22), end: new Date(year, realMonth, daysInMonth, 23, 59, 59) },
+  ];
+}
+
+/**
+ * Find which snapshot covers a given week.
+ * A snapshot's cycle covers snapshotDate to snapshotDate + 13 days.
+ * We pick the snapshot whose cycle period overlaps with the week's midpoint.
+ */
+function findSnapshotForWeek(
+  weekStart: Date,
+  weekEnd: Date,
+  snaps: SnapshotData[]
+): SnapshotData | null {
+  const weekMid = new Date((weekStart.getTime() + weekEnd.getTime()) / 2);
+
+  for (const snap of snaps) {
+    const cycleStart = new Date(snap.snapshotDate);
+    const cycleEnd = new Date(cycleStart);
+    cycleEnd.setDate(cycleEnd.getDate() + 13);
+    cycleEnd.setHours(23, 59, 59);
+
+    if (weekMid >= cycleStart && weekMid <= cycleEnd) {
+      return snap;
+    }
+  }
+  return null;
+}
+
+// --- Overview Grid ---
+
+function OverviewGrid({
+  fellowIds,
+  fellowNames,
+  fellowMonthMap,
+  onSelectFellow,
+}: {
+  fellowIds: string[];
+  fellowNames: Map<string, string>;
+  fellowMonthMap: Map<string, Map<number, SnapshotData>>;
+  onSelectFellow: (id: string) => void;
+}) {
+  if (fellowIds.length === 0) {
+    return (
+      <p className="text-gray-500 text-sm mt-8">No snapshot data for this IY yet.</p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="border p-2 text-left sticky left-0 bg-gray-50 z-10">Fellow</th>
+            {MONTHS.map(m => (
+              <th key={m} className="border p-2 text-center min-w-[100px]">{m}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {fellowIds.map(fid => {
+            const months = fellowMonthMap.get(fid)!;
+            return (
+              <tr key={fid}>
+                <td className="border p-2 font-medium sticky left-0 bg-white z-10">
+                  <button
+                    onClick={() => onSelectFellow(fid)}
+                    className="text-blue-600 hover:underline text-left"
+                  >
+                    {fellowNames.get(fid)}
+                  </button>
+                </td>
+                {MONTHS.map((_, idx) => {
+                  const snap = months.get(idx);
+                  if (!snap) {
+                    return <td key={idx} className="border p-2 text-center text-gray-300">—</td>;
+                  }
+                  return (
+                    <td
+                      key={idx}
+                      className={`border p-2 text-center text-xs ${getLoadColor(snap.loadTag)}`}
+                    >
+                      <div className="font-medium">{Math.round(snap.utilizationPct * 100)}%</div>
+                      <div className="text-[10px] opacity-75">
+                        {snap.totalMeu.toFixed(2)}/{snap.capacityMeu.toFixed(1)}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Project Breakdown Table ---
+
+function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[] }) {
+  if (breakdown.length === 0) return null;
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="p-2 text-left">Project</th>
+            <th className="p-2 text-center">Type</th>
+            <th className="p-2 text-center">Score</th>
+            <th className="p-2 text-center">MEU</th>
+            <th className="p-2 text-center">Hrs/Day</th>
+          </tr>
+        </thead>
+        <tbody>
+          {breakdown.map((b, i) => {
+            const typeInfo = TYPE_LABELS[b.projectType] || { label: b.projectType, color: '' };
+            return (
+              <tr key={i} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
+                <td className="p-2">{b.projectName}</td>
+                <td className={`p-2 text-center uppercase text-[11px] font-medium ${typeInfo.color}`}>
+                  {typeInfo.label}
+                </td>
+                <td className="p-2 text-center">{b.score}</td>
+                <td className="p-2 text-center">{b.meu.toFixed(2)}</td>
+                <td className="p-2 text-center">{b.hoursPerDay}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Drill Down View ---
+
+function DrillDown({
+  fellowId,
+  fellowSnapshots,
+  iy,
+  onBack,
+}: {
+  fellowId: string;
+  fellowSnapshots: SnapshotData[];
+  iy: number;
+  onBack: () => void;
+}) {
+  const [expandedMonths, setExpandedMonths] = useState<Set<number>>(new Set());
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
+
+  if (fellowSnapshots.length === 0) {
+    return (
+      <div>
+        <button onClick={onBack} className="text-sm text-blue-600 hover:underline mb-4">
+          ← Back to overview
+        </button>
+        <p className="text-gray-500">No data for this fellow.</p>
+      </div>
+    );
+  }
+
+  const fellowName = fellowSnapshots[0].fellowName;
+  const designation = fellowSnapshots[0].designation;
+  const capacityMeu = fellowSnapshots[0].capacityMeu;
+
+  // Group snapshots by month — keep ALL snapshots (not just latest) for week mapping
+  const monthSnapshots = new Map<number, SnapshotData[]>();
+  const monthLatest = new Map<number, SnapshotData>();
+
+  for (const snap of fellowSnapshots) {
+    const idx = toMonthIdx(snap.snapshotDate);
+
+    const list = monthSnapshots.get(idx) || [];
+    list.push(snap);
+    monthSnapshots.set(idx, list);
+
+    const existing = monthLatest.get(idx);
+    if (!existing || snap.snapshotDate > existing.snapshotDate) {
+      monthLatest.set(idx, snap);
+    }
+  }
+
+  function toggleMonth(idx: number) {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) {
+        next.delete(idx);
+        // Also collapse any expanded weeks in this month
+        setExpandedWeeks(prevWeeks => {
+          const nextWeeks = new Set(prevWeeks);
+          for (const key of prevWeeks) {
+            if (key.startsWith(`${idx}-`)) nextWeeks.delete(key);
+          }
+          return nextWeeks;
+        });
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+  }
+
+  function toggleWeek(monthIdx: number, weekIdx: number) {
+    const key = `${monthIdx}-${weekIdx}`;
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} className="text-sm text-blue-600 hover:underline">
+        ← Back to overview
+      </button>
+
+      <div className="mt-4 mb-6">
+        <h2 className="text-xl font-bold">{fellowName}</h2>
+        <p className="text-sm text-gray-500">
+          {designation} · Capacity: {capacityMeu} MEU · IY{iy}
+        </p>
+      </div>
+
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="border p-2 text-left">Month</th>
+            <th className="border p-2 text-center">Utilization</th>
+            <th className="border p-2 text-center">MEU</th>
+            <th className="border p-2 text-center">Mandates</th>
+            <th className="border p-2 text-center">DDEs</th>
+            <th className="border p-2 text-center">Pitches</th>
+          </tr>
+        </thead>
+        <tbody>
+          {MONTHS.map((monthName, idx) => {
+            const latestSnap = monthLatest.get(idx);
+            const isExpanded = expandedMonths.has(idx);
+            const snaps = monthSnapshots.get(idx) || [];
+            const weeks = getWeekRanges(idx, iy);
+
+            if (!latestSnap) {
+              return (
+                <tr key={idx}>
+                  <td className="border p-2 text-gray-400">{monthName}</td>
+                  <td className="border p-2 text-center text-gray-300" colSpan={5}>—</td>
+                </tr>
+              );
+            }
+
+            const breakdown = latestSnap.projectBreakdown;
+            const mandateCount = breakdown.filter(b => b.projectType === 'mandate').length;
+            const ddeCount = breakdown.filter(b => b.projectType === 'dde').length;
+            const pitchCount = breakdown.filter(b => b.projectType === 'pitch').length;
+
+            const rows: React.ReactNode[] = [];
+
+            // Month summary row
+            rows.push(
+              <tr
+                key={idx}
+                className="cursor-pointer hover:bg-gray-50"
+                onClick={() => toggleMonth(idx)}
+              >
+                <td className="border p-2 font-medium">
+                  <span className="mr-2 text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
+                  {monthName}
+                </td>
+                <td className={`border p-2 text-center font-medium ${getLoadColor(latestSnap.loadTag)}`}>
+                  {Math.round(latestSnap.utilizationPct * 100)}%
+                </td>
+                <td className="border p-2 text-center">
+                  {latestSnap.totalMeu.toFixed(2)} / {latestSnap.capacityMeu.toFixed(1)}
+                </td>
+                <td className="border p-2 text-center">{mandateCount}</td>
+                <td className="border p-2 text-center">{ddeCount}</td>
+                <td className="border p-2 text-center">{pitchCount}</td>
+              </tr>
+            );
+
+            // Week rows when expanded
+            if (isExpanded) {
+              weeks.forEach((week, wIdx) => {
+                const weekSnap = findSnapshotForWeek(week.start, week.end, snaps);
+                const weekKey = `${idx}-${wIdx}`;
+                const weekExpanded = expandedWeeks.has(weekKey);
+
+                if (!weekSnap) {
+                  rows.push(
+                    <tr key={`${idx}-w${wIdx}`} className="bg-gray-50/50">
+                      <td className="border p-2 pl-8 text-xs text-gray-400">{week.label}</td>
+                      <td className="border p-2 text-center text-gray-300 text-xs" colSpan={5}>—</td>
+                    </tr>
+                  );
+                  return;
+                }
+
+                const wb = weekSnap.projectBreakdown;
+                const wMandates = wb.filter(b => b.projectType === 'mandate').length;
+                const wDdes = wb.filter(b => b.projectType === 'dde').length;
+                const wPitches = wb.filter(b => b.projectType === 'pitch').length;
+
+                rows.push(
+                  <tr
+                    key={`${idx}-w${wIdx}`}
+                    className="bg-gray-50/50 cursor-pointer hover:bg-gray-100"
+                    onClick={(e) => { e.stopPropagation(); toggleWeek(idx, wIdx); }}
+                  >
+                    <td className="border p-2 pl-8 text-xs text-gray-600">
+                      <span className="mr-1.5 text-gray-400 text-[10px]">{weekExpanded ? '▼' : '▶'}</span>
+                      {week.label}
+                    </td>
+                    <td className={`border p-2 text-center text-xs ${getLoadColor(weekSnap.loadTag)}`}>
+                      {Math.round(weekSnap.utilizationPct * 100)}%
+                    </td>
+                    <td className="border p-2 text-center text-xs">
+                      {weekSnap.totalMeu.toFixed(2)} / {weekSnap.capacityMeu.toFixed(1)}
+                    </td>
+                    <td className="border p-2 text-center text-xs">{wMandates}</td>
+                    <td className="border p-2 text-center text-xs">{wDdes}</td>
+                    <td className="border p-2 text-center text-xs">{wPitches}</td>
+                  </tr>
+                );
+
+                // Project breakdown when week is expanded
+                if (weekExpanded) {
+                  rows.push(
+                    <tr key={`${idx}-w${wIdx}-breakdown`}>
+                      <td colSpan={6} className="border p-3 bg-white">
+                        <ProjectBreakdownTable breakdown={weekSnap.projectBreakdown} />
+                      </td>
+                    </tr>
+                  );
+                }
+              });
+            }
+
+            return rows;
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Main Dashboard View ---
+
+export function DashboardView({
+  snapshots,
+  iy,
+}: {
+  snapshots: SnapshotData[];
+  iy: number;
+}) {
+  const [selectedFellow, setSelectedFellow] = useState<string | null>(null);
+
+  // Build overview data structures
+  const fellowMonthMap = new Map<string, Map<number, SnapshotData>>();
+  const fellowNames = new Map<string, string>();
+  const fellowAllSnapshots = new Map<string, SnapshotData[]>();
+
+  for (const snap of snapshots) {
+    const monthIdx = toMonthIdx(snap.snapshotDate);
+
+    // For overview: keep latest snapshot per fellow per month
+    if (!fellowMonthMap.has(snap.fellowRecordId)) {
+      fellowMonthMap.set(snap.fellowRecordId, new Map());
+    }
+    const existing = fellowMonthMap.get(snap.fellowRecordId)!.get(monthIdx);
+    if (!existing || snap.snapshotDate > existing.snapshotDate) {
+      fellowMonthMap.get(snap.fellowRecordId)!.set(monthIdx, snap);
+    }
+
+    fellowNames.set(snap.fellowRecordId, snap.fellowName);
+
+    // For drill-down: keep all snapshots per fellow
+    const all = fellowAllSnapshots.get(snap.fellowRecordId) || [];
+    all.push(snap);
+    fellowAllSnapshots.set(snap.fellowRecordId, all);
+  }
+
+  const fellowIds = Array.from(fellowMonthMap.keys()).sort((a, b) =>
+    (fellowNames.get(a) || '').localeCompare(fellowNames.get(b) || '')
+  );
+
+  if (selectedFellow) {
+    return (
+      <DrillDown
+        fellowId={selectedFellow}
+        fellowSnapshots={fellowAllSnapshots.get(selectedFellow) || []}
+        iy={iy}
+        onBack={() => setSelectedFellow(null)}
+      />
+    );
+  }
+
+  return (
+    <OverviewGrid
+      fellowIds={fellowIds}
+      fellowNames={fellowNames}
+      fellowMonthMap={fellowMonthMap}
+      onSelectFellow={setSelectedFellow}
+    />
+  );
+}
