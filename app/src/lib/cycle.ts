@@ -3,7 +3,7 @@ import { cycles, tokens, submissions, conflicts, snapshots } from '@/lib/db/sche
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
-import { sendCollectionEmail, sendCompletionEmail } from '@/lib/email';
+import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { generateNarrative, writeBandwidthToAirtable } from '@/lib/airtable/writeback';
 import { sumMeu, calculateUtilization, getLoadTag } from '@/lib/utilization';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
@@ -128,8 +128,10 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     }
   }
 
-  // Create snapshots per fellow
+  // Create snapshots per fellow and collect summaries for email
   const dateStr = cycle.startDate;
+  const fellowSummaries: FellowSummary[] = [];
+
   for (const fellow of fellows) {
     const fellowSubs = allSubmissions.filter(
       s => s.fellowRecordId === fellow.recordId && s.isSelfReport
@@ -161,6 +163,14 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       projectBreakdown: breakdown,
       snapshotDate: dateStr,
     });
+
+    fellowSummaries.push({
+      name: fellow.name,
+      designation: fellow.designation,
+      utilizationPct: utilPct,
+      loadTag,
+      projectCount: fellowSubs.length,
+    });
   }
 
   // Mark cycle complete
@@ -179,6 +189,7 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     allSubmissions.filter(s => s.isSelfReport).length,
     conflictCount,
     projectCount,
-    failures
+    failures,
+    fellowSummaries
   );
 }

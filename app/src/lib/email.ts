@@ -13,6 +13,13 @@ function overrideCc(emails: string[]): string[] {
   return testEmailOverride ? emails.map(() => testEmailOverride) : emails;
 }
 
+/** Standard CC list: Pai + Ajder (filtered for blanks). */
+function standardCc(): string[] {
+  return overrideCc(
+    [process.env.CC_EMAIL!, process.env.ADMIN_EMAIL!].filter(Boolean)
+  );
+}
+
 function formatDateRange(startDate: string): string {
   const start = new Date(startDate);
   const end = new Date(start);
@@ -55,6 +62,16 @@ function buildGroupedProjectsHtml(projects: ProjectAssignment[]): string {
     .join('');
 }
 
+function buildProjectSummaryLine(projects: ProjectAssignment[]): string {
+  const counts: Record<string, number> = {};
+  for (const p of projects) counts[p.projectType] = (counts[p.projectType] || 0) + 1;
+  const parts: string[] = [];
+  if (counts.mandate) parts.push(`${counts.mandate} mandate${counts.mandate > 1 ? 's' : ''}`);
+  if (counts.dde) parts.push(`${counts.dde} DDE${counts.dde > 1 ? 's' : ''}`);
+  if (counts.pitch) parts.push(`${counts.pitch} pitch${counts.pitch > 1 ? 'es' : ''}`);
+  return `You have <strong>${projects.length} active project${projects.length !== 1 ? 's' : ''}</strong>: ${parts.join(', ')}.`;
+}
+
 // --- Collection Email ---
 export async function sendCollectionEmail(
   fellow: Fellow,
@@ -64,14 +81,17 @@ export async function sendCollectionEmail(
 ) {
   const dateRange = formatDateRange(cycleStartDate);
   const sectionsHtml = buildGroupedProjectsHtml(projects);
+  const summaryLine = buildProjectSummaryLine(projects);
 
   await resend.emails.send({
     from,
     to: overrideTo(fellow.email),
+    cc: standardCc(),
     subject: `Bandwidth Update — ${dateRange}`,
     html: `
       <p>Hi ${fellow.name},</p>
       <p>Please submit your bandwidth update for the current cycle (${dateRange}).</p>
+      <p style="background:#f0f9ff;padding:12px 16px;border-radius:8px;border-left:4px solid #2563eb;margin:16px 0">${summaryLine}</p>
       ${sectionsHtml}
       <a href="${process.env.APP_URL}/submit/${token}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin-top:16px">Submit Your Bandwidth</a>
     `,
@@ -89,6 +109,7 @@ export async function sendReminderEmail(
   await resend.emails.send({
     from,
     to: overrideTo(fellow.email),
+    cc: standardCc(),
     subject: 'Reminder: Bandwidth Update Pending',
     html: `
       <p>Hi ${fellow.name},</p>
@@ -130,12 +151,29 @@ export async function sendConflictEmail(
 }
 
 // --- Completion Report Email ---
+export interface FellowSummary {
+  name: string;
+  designation: string;
+  utilizationPct: number;
+  loadTag: string;
+  projectCount: number;
+}
+
+const LOAD_TAG_COLORS: Record<string, { bg: string; text: string }> = {
+  Free: { bg: '#dcfce7', text: '#166534' },
+  Comfortable: { bg: '#dcfce7', text: '#166534' },
+  Busy: { bg: '#fef9c3', text: '#854d0e' },
+  'At Capacity': { bg: '#fed7aa', text: '#9a3412' },
+  Overloaded: { bg: '#fecaca', text: '#991b1b' },
+};
+
 export async function sendCompletionEmail(
   cycleStartDate: string,
   submissionCount: number,
   conflictCount: number,
   projectCount: number,
-  failures: Array<{ projectName: string; error: string }>
+  failures: Array<{ projectName: string; error: string }>,
+  fellowSummaries: FellowSummary[] = []
 ) {
   const dateRange = formatDateRange(cycleStartDate);
 
@@ -143,14 +181,50 @@ export async function sendCompletionEmail(
     ? `<p style="color:#dc2626"><strong>Failures:</strong></p><ul>${failures.map(f => `<li>${f.projectName}: ${f.error}</li>`).join('')}</ul>`
     : '';
 
+  const fellowRows = fellowSummaries
+    .sort((a, b) => b.utilizationPct - a.utilizationPct)
+    .map((f, i) => {
+      const rowBg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+      const pct = Math.round(f.utilizationPct * 100);
+      const tagColors = LOAD_TAG_COLORS[f.loadTag] || { bg: '#f3f4f6', text: '#374151' };
+      return `<tr style="background:${rowBg}">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500">${f.name}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${f.designation}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;text-align:center">${pct}%</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center"><span style="background:${tagColors.bg};color:${tagColors.text};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${f.loadTag}</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${f.projectCount}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const fellowTableHtml = fellowSummaries.length > 0
+    ? `
+      <p style="font-weight:700;font-size:15px;margin:24px 0 8px;color:#1f2937">Fellow Utilization</p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Fellow</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Role</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Utilization</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Load</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Projects</th>
+        </tr>
+        ${fellowRows}
+      </table>`
+    : '';
+
   await resend.emails.send({
     from,
-    to: process.env.ADMIN_EMAIL!,
+    to: overrideTo(process.env.ADMIN_EMAIL!),
+    cc: standardCc(),
     subject: `Bandwidth Cycle ${dateRange} — Complete`,
     html: `
-      <p>${submissionCount} submissions processed, ${conflictCount} conflicts resolved.</p>
-      <p>All ${projectCount} project bandwidth fields updated on Airtable${failures.length > 0 ? ' with some failures' : ' successfully'}.</p>
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">Cycle Complete: ${dateRange}</p>
+      <div style="background:#f0fdf4;padding:12px 16px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0;font-size:14px"><strong>${submissionCount}</strong> submissions processed · <strong>${conflictCount}</strong> conflict${conflictCount !== 1 ? 's' : ''} resolved · <strong>${projectCount}</strong> project${projectCount !== 1 ? 's' : ''} written to Airtable${failures.length > 0 ? ' (with failures)' : ''}</p>
+      </div>
+      ${fellowTableHtml}
       ${failureHtml}
+      <p style="margin-top:24px"><a href="${process.env.APP_URL}/dashboard" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">View Dashboard</a></p>
     `,
   });
 }
