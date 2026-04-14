@@ -3,6 +3,15 @@ import type { ProjectAssignment, Fellow } from '@/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
+const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
+
+/** When TEST_EMAIL_OVERRIDE is set, redirect all recipients to that address. */
+function overrideTo(email: string): string {
+  return testEmailOverride || email;
+}
+function overrideCc(emails: string[]): string[] {
+  return testEmailOverride ? emails.map(() => testEmailOverride) : emails;
+}
 
 function formatDateRange(startDate: string): string {
   const start = new Date(startDate);
@@ -25,7 +34,7 @@ export async function sendCollectionEmail(
 
   await resend.emails.send({
     from,
-    to: fellow.email,
+    to: overrideTo(fellow.email),
     subject: `Bandwidth Update — ${dateRange}`,
     html: `
       <p>Hi ${fellow.name},</p>
@@ -49,7 +58,7 @@ export async function sendReminderEmail(
 
   await resend.emails.send({
     from,
-    to: fellow.email,
+    to: overrideTo(fellow.email),
     subject: 'Reminder: Bandwidth Update Pending',
     html: `
       <p>Hi ${fellow.name},</p>
@@ -74,8 +83,8 @@ export async function sendConflictEmail(
 
   await resend.emails.send({
     from,
-    to: vpEmail,
-    cc: [associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean),
+    to: overrideTo(vpEmail),
+    cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
     subject: `Bandwidth Conflict — ${projectName}`,
     html: `
       <p>Hi ${vpName},</p>
