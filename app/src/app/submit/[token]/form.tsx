@@ -23,10 +23,10 @@ interface HoursEntry {
   hoursUnit: 'per_day' | 'per_week';
 }
 
-const TYPE_SECTIONS: { type: string; label: string }[] = [
-  { type: 'mandate', label: 'Mandates' },
-  { type: 'dde', label: 'DDEs' },
-  { type: 'pitch', label: 'Pitches' },
+const TYPE_SECTIONS: { type: string; label: string; color: string; border: string; bg: string }[] = [
+  { type: 'mandate', label: 'Mandates', color: 'text-blue-800', border: 'border-l-blue-600', bg: 'bg-blue-50' },
+  { type: 'dde', label: 'DDEs', color: 'text-teal-800', border: 'border-l-teal-600', bg: 'bg-teal-50' },
+  { type: 'pitch', label: 'Pitches', color: 'text-violet-800', border: 'border-l-violet-600', bg: 'bg-violet-50' },
 ];
 
 export function SubmissionForm({
@@ -105,23 +105,23 @@ export function SubmissionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-10">
-      {TYPE_SECTIONS.map(({ type, label }) => {
+      {TYPE_SECTIONS.map(({ type, label, color, border, bg }) => {
         const group = projects.filter(p => p.projectType === type);
         if (group.length === 0) return null;
         return (
           <section key={type}>
-            <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-lg font-bold text-gray-800">{label}</h2>
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-xs text-gray-400">{group.length} project{group.length !== 1 ? 's' : ''}</span>
+            <div className={`flex items-center gap-3 mb-4 ${bg} -mx-2 px-3 py-2 rounded-lg`}>
+              <h2 className={`text-base font-bold uppercase tracking-wide ${color}`}>{label}</h2>
+              <div className="flex-1 h-px bg-gray-300" />
+              <span className="text-xs text-gray-500 font-medium">{group.length} project{group.length !== 1 ? 's' : ''}</span>
             </div>
             <div className="space-y-4">
               {group.map(project => (
-                <div key={project.projectRecordId} className="border rounded-lg p-4">
+                <div key={project.projectRecordId} className={`border rounded-lg p-4 border-l-4 ${border}`}>
                   <div className="flex items-center gap-2 mb-3">
                     <h3 className="text-base font-semibold">{project.projectName}</h3>
                     {project.stage && (
-                      <span className="text-xs text-gray-500 bg-gray-50 px-2 py-0.5 rounded">{project.stage}</span>
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{project.stage}</span>
                     )}
                   </div>
 

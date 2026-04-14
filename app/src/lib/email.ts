@@ -20,10 +20,10 @@ function formatDateRange(startDate: string): string {
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
-const TYPE_ORDER: { type: ProjectType; label: string }[] = [
-  { type: 'mandate', label: 'Mandates' },
-  { type: 'dde', label: 'DDEs' },
-  { type: 'pitch', label: 'Pitches' },
+const TYPE_ORDER: { type: ProjectType; label: string; color: string; bg: string }[] = [
+  { type: 'mandate', label: 'Mandates', color: '#1e40af', bg: '#dbeafe' },
+  { type: 'dde', label: 'DDEs', color: '#0f766e', bg: '#ccfbf1' },
+  { type: 'pitch', label: 'Pitches', color: '#7c3aed', bg: '#ede9fe' },
 ];
 
 function buildGroupedProjectsHtml(projects: ProjectAssignment[]): string {
@@ -36,16 +36,21 @@ function buildGroupedProjectsHtml(projects: ProjectAssignment[]): string {
 
   return TYPE_ORDER
     .filter(({ type }) => grouped.has(type))
-    .map(({ type, label }) => {
+    .map(({ type, label, color, bg }) => {
       const rows = grouped.get(type)!
-        .map(p => `<tr><td style="padding:8px;border:1px solid #e5e7eb">${p.projectName}</td><td style="padding:8px;border:1px solid #e5e7eb;color:#6b7280">${p.stage}</td></tr>`)
+        .map((p, i) => {
+          const rowBg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+          return `<tr style="background:${rowBg}"><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px">${p.projectName}</td><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${p.stage}</td></tr>`;
+        })
         .join('');
       return `
-        <p style="font-weight:600;font-size:15px;margin:20px 0 8px;color:#1f2937">${label}</p>
-        <table style="border-collapse:collapse;width:100%;margin-bottom:4px">
-          <tr style="background:#f3f4f6"><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;font-size:13px">Project</th><th style="padding:8px;border:1px solid #e5e7eb;text-align:left;font-size:13px">Stage</th></tr>
-          ${rows}
-        </table>`;
+        <div style="margin:24px 0 16px">
+          <p style="font-weight:700;font-size:14px;margin:0 0 8px;color:${color};text-transform:uppercase;letter-spacing:0.5px">${label}</p>
+          <table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:${bg}"><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:${color};border-bottom:2px solid ${color}20">Project</th><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:${color};border-bottom:2px solid ${color}20">Stage</th></tr>
+            ${rows}
+          </table>
+        </div>`;
     })
     .join('');
 }
