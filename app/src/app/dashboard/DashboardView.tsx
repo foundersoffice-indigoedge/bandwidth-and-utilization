@@ -6,6 +6,14 @@ import type { ProjectBreakdownItem } from '@/types';
 
 const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
+function getLoadTag(util: number): string {
+  if (util < 0.30) return 'Free';
+  if (util < 0.60) return 'Comfortable';
+  if (util < 0.85) return 'Busy';
+  if (util <= 1.00) return 'At Capacity';
+  return 'Overloaded';
+}
+
 function getLoadColor(tag: string): string {
   switch (tag) {
     case 'Free':
@@ -88,12 +96,12 @@ function findSnapshotForWeek(
 function OverviewGrid({
   fellowIds,
   fellowNames,
-  fellowMonthMap,
+  fellowMonthSnaps,
   onSelectFellow,
 }: {
   fellowIds: string[];
   fellowNames: Map<string, string>;
-  fellowMonthMap: Map<string, Map<number, SnapshotData>>;
+  fellowMonthSnaps: Map<string, Map<number, SnapshotData[]>>;
   onSelectFellow: (id: string) => void;
 }) {
   if (fellowIds.length === 0) {
@@ -115,7 +123,7 @@ function OverviewGrid({
         </thead>
         <tbody>
           {fellowIds.map(fid => {
-            const months = fellowMonthMap.get(fid)!;
+            const months = fellowMonthSnaps.get(fid)!;
             return (
               <tr key={fid}>
                 <td className="border p-2 font-medium sticky left-0 bg-white z-10">
@@ -127,18 +135,23 @@ function OverviewGrid({
                   </button>
                 </td>
                 {MONTHS.map((_, idx) => {
-                  const snap = months.get(idx);
-                  if (!snap) {
+                  const snaps = months.get(idx);
+                  if (!snaps || snaps.length === 0) {
                     return <td key={idx} className="border p-2 text-center text-gray-300">—</td>;
                   }
+                  const n = snaps.length;
+                  const avgUtil = snaps.reduce((s, snap) => s + snap.utilizationPct, 0) / n;
+                  const avgMeu = snaps.reduce((s, snap) => s + snap.totalMeu, 0) / n;
+                  const avgCap = snaps.reduce((s, snap) => s + snap.capacityMeu, 0) / n;
+                  const tag = getLoadTag(avgUtil);
                   return (
                     <td
                       key={idx}
-                      className={`border p-2 text-center text-xs ${getLoadColor(snap.loadTag)}`}
+                      className={`border p-2 text-center text-xs ${getLoadColor(tag)}`}
                     >
-                      <div className="font-medium">{Math.round(snap.utilizationPct * 100)}%</div>
+                      <div className="font-medium">{Math.round(avgUtil * 100)}%</div>
                       <div className="text-[10px] opacity-75">
-                        {snap.totalMeu.toFixed(2)}/{snap.capacityMeu.toFixed(1)}
+                        {avgMeu.toFixed(2)}/{avgCap.toFixed(1)}
                       </div>
                     </td>
                   );
@@ -221,21 +234,14 @@ function DrillDown({
   const designation = fellowSnapshots[0].designation;
   const capacityMeu = fellowSnapshots[0].capacityMeu;
 
-  // Group snapshots by month — keep ALL snapshots (not just latest) for week mapping
+  // Group snapshots by month for week mapping and monthly averages
   const monthSnapshots = new Map<number, SnapshotData[]>();
-  const monthLatest = new Map<number, SnapshotData>();
 
   for (const snap of fellowSnapshots) {
     const idx = toMonthIdx(snap.snapshotDate);
-
     const list = monthSnapshots.get(idx) || [];
     list.push(snap);
     monthSnapshots.set(idx, list);
-
-    const existing = monthLatest.get(idx);
-    if (!existing || snap.snapshotDate > existing.snapshotDate) {
-      monthLatest.set(idx, snap);
-    }
   }
 
   function toggleMonth(idx: number) {
@@ -294,12 +300,11 @@ function DrillDown({
         </thead>
         <tbody>
           {MONTHS.map((monthName, idx) => {
-            const latestSnap = monthLatest.get(idx);
             const isExpanded = expandedMonths.has(idx);
             const snaps = monthSnapshots.get(idx) || [];
             const weeks = getWeekRanges(idx, iy);
 
-            if (!latestSnap) {
+            if (snaps.length === 0) {
               return (
                 <tr key={idx}>
                   <td className="border p-2 text-gray-400">{monthName}</td>
@@ -308,14 +313,19 @@ function DrillDown({
               );
             }
 
-            const breakdown = latestSnap.projectBreakdown;
-            const mandateCount = breakdown.filter(b => b.projectType === 'mandate').length;
-            const ddeCount = breakdown.filter(b => b.projectType === 'dde').length;
-            const pitchCount = breakdown.filter(b => b.projectType === 'pitch').length;
+            // Average across all snapshots in this month
+            const n = snaps.length;
+            const avgUtil = snaps.reduce((s, snap) => s + snap.utilizationPct, 0) / n;
+            const avgMeu = snaps.reduce((s, snap) => s + snap.totalMeu, 0) / n;
+            const avgCap = snaps.reduce((s, snap) => s + snap.capacityMeu, 0) / n;
+            const avgMandates = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'mandate').length, 0) / n;
+            const avgDdes = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'dde').length, 0) / n;
+            const avgPitches = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'pitch').length, 0) / n;
+            const avgLoadTag = getLoadTag(avgUtil);
 
             const rows: React.ReactNode[] = [];
 
-            // Month summary row
+            // Month summary row (averages)
             rows.push(
               <tr
                 key={idx}
@@ -326,15 +336,15 @@ function DrillDown({
                   <span className="mr-2 text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
                   {monthName}
                 </td>
-                <td className={`border p-2 text-center font-medium ${getLoadColor(latestSnap.loadTag)}`}>
-                  {Math.round(latestSnap.utilizationPct * 100)}%
+                <td className={`border p-2 text-center font-medium ${getLoadColor(avgLoadTag)}`}>
+                  {Math.round(avgUtil * 100)}%
                 </td>
                 <td className="border p-2 text-center">
-                  {latestSnap.totalMeu.toFixed(2)} / {latestSnap.capacityMeu.toFixed(1)}
+                  {avgMeu.toFixed(2)} / {avgCap.toFixed(1)}
                 </td>
-                <td className="border p-2 text-center">{mandateCount}</td>
-                <td className="border p-2 text-center">{ddeCount}</td>
-                <td className="border p-2 text-center">{pitchCount}</td>
+                <td className="border p-2 text-center">{avgMandates % 1 === 0 ? avgMandates : avgMandates.toFixed(1)}</td>
+                <td className="border p-2 text-center">{avgDdes % 1 === 0 ? avgDdes : avgDdes.toFixed(1)}</td>
+                <td className="border p-2 text-center">{avgPitches % 1 === 0 ? avgPitches : avgPitches.toFixed(1)}</td>
               </tr>
             );
 
@@ -415,21 +425,21 @@ export function DashboardView({
   const [selectedFellow, setSelectedFellow] = useState<string | null>(null);
 
   // Build overview data structures
-  const fellowMonthMap = new Map<string, Map<number, SnapshotData>>();
+  const fellowMonthSnaps = new Map<string, Map<number, SnapshotData[]>>();
   const fellowNames = new Map<string, string>();
   const fellowAllSnapshots = new Map<string, SnapshotData[]>();
 
   for (const snap of snapshots) {
     const monthIdx = toMonthIdx(snap.snapshotDate);
 
-    // For overview: keep latest snapshot per fellow per month
-    if (!fellowMonthMap.has(snap.fellowRecordId)) {
-      fellowMonthMap.set(snap.fellowRecordId, new Map());
+    // For overview: collect all snapshots per fellow per month
+    if (!fellowMonthSnaps.has(snap.fellowRecordId)) {
+      fellowMonthSnaps.set(snap.fellowRecordId, new Map());
     }
-    const existing = fellowMonthMap.get(snap.fellowRecordId)!.get(monthIdx);
-    if (!existing || snap.snapshotDate > existing.snapshotDate) {
-      fellowMonthMap.get(snap.fellowRecordId)!.set(monthIdx, snap);
-    }
+    const monthMap = fellowMonthSnaps.get(snap.fellowRecordId)!;
+    const list = monthMap.get(monthIdx) || [];
+    list.push(snap);
+    monthMap.set(monthIdx, list);
 
     fellowNames.set(snap.fellowRecordId, snap.fellowName);
 
@@ -439,7 +449,7 @@ export function DashboardView({
     fellowAllSnapshots.set(snap.fellowRecordId, all);
   }
 
-  const fellowIds = Array.from(fellowMonthMap.keys()).sort((a, b) =>
+  const fellowIds = Array.from(fellowMonthSnaps.keys()).sort((a, b) =>
     (fellowNames.get(a) || '').localeCompare(fellowNames.get(b) || '')
   );
 
@@ -458,7 +468,7 @@ export function DashboardView({
     <OverviewGrid
       fellowIds={fellowIds}
       fellowNames={fellowNames}
-      fellowMonthMap={fellowMonthMap}
+      fellowMonthSnaps={fellowMonthSnaps}
       onSelectFellow={setSelectedFellow}
     />
   );
