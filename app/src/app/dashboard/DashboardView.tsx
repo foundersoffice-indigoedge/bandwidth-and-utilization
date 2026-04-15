@@ -57,14 +57,15 @@ function getWeekRanges(monthIdx: number, iy: number): { label: string; start: Da
 /**
  * Find which snapshot covers a given week.
  * A snapshot's cycle covers snapshotDate to snapshotDate + 13 days.
- * We pick the snapshot whose cycle period overlaps with the week's midpoint.
+ * Match if the week and cycle overlap at all (not just midpoint).
+ * If multiple cycles overlap, pick the latest one.
  */
 function findSnapshotForWeek(
   weekStart: Date,
   weekEnd: Date,
   snaps: SnapshotData[]
 ): SnapshotData | null {
-  const weekMid = new Date((weekStart.getTime() + weekEnd.getTime()) / 2);
+  let best: SnapshotData | null = null;
 
   for (const snap of snaps) {
     const cycleStart = new Date(snap.snapshotDate);
@@ -72,11 +73,14 @@ function findSnapshotForWeek(
     cycleEnd.setDate(cycleEnd.getDate() + 13);
     cycleEnd.setHours(23, 59, 59);
 
-    if (weekMid >= cycleStart && weekMid <= cycleEnd) {
-      return snap;
+    // Week and cycle overlap if week starts before cycle ends AND week ends after cycle starts
+    if (weekStart <= cycleEnd && weekEnd >= cycleStart) {
+      if (!best || snap.snapshotDate > best.snapshotDate) {
+        best = snap;
+      }
     }
   }
-  return null;
+  return best;
 }
 
 // --- Overview Grid ---
@@ -337,7 +341,7 @@ function DrillDown({
             // Week rows when expanded
             if (isExpanded) {
               weeks.forEach((week, wIdx) => {
-                const weekSnap = findSnapshotForWeek(week.start, week.end, snaps);
+                const weekSnap = findSnapshotForWeek(week.start, week.end, fellowSnapshots);
                 const weekKey = `${idx}-${wIdx}`;
                 const weekExpanded = expandedWeeks.has(weekKey);
 
