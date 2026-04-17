@@ -5,6 +5,12 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
 const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 
+/** Send an email via Resend, throwing on failure (Resend SDK returns errors instead of throwing). */
+async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<void> {
+  const { error } = await resend.emails.send(params);
+  if (error) throw new Error(`Resend error: ${error.message}`);
+}
+
 /** When TEST_EMAIL_OVERRIDE is set, redirect all recipients to that address. */
 function overrideTo(email: string): string {
   return testEmailOverride || email;
@@ -83,7 +89,7 @@ export async function sendCollectionEmail(
   const sectionsHtml = buildGroupedProjectsHtml(projects);
   const summaryLine = buildProjectSummaryLine(projects);
 
-  await resend.emails.send({
+  await sendEmail({
     from,
     to: overrideTo(fellow.email),
     subject: `Bandwidth Update — ${dateRange}`,
@@ -105,7 +111,7 @@ export async function sendReminderEmail(
 ) {
   const dateRange = formatDateRange(cycleStartDate);
 
-  await resend.emails.send({
+  await sendEmail({
     from,
     to: overrideTo(fellow.email),
     subject: 'Reminder: Bandwidth Update Pending',
@@ -130,7 +136,7 @@ export async function sendConflictEmail(
 ) {
   const appUrl = process.env.APP_URL;
 
-  await resend.emails.send({
+  await sendEmail({
     from,
     to: overrideTo(vpEmail),
     cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
@@ -214,7 +220,7 @@ export async function sendCompletionEmail(
       </table>`
     : '';
 
-  await resend.emails.send({
+  await sendEmail({
     from,
     to: overrideTo(process.env.ADMIN_EMAIL!),
     cc: standardCc(),

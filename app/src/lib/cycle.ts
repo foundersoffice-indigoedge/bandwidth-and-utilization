@@ -9,6 +9,8 @@ import { sumMeu, calculateUtilization, getLoadTag, calculateHoursUtilization } f
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
 export { isCycleMonday } from '@/lib/schedule';
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function startCycle(testFellowIds?: string[]): Promise<string> {
   const today = new Date();
   const startDate = today.toISOString().split('T')[0];
@@ -40,6 +42,7 @@ export async function startCycle(testFellowIds?: string[]): Promise<string> {
     });
 
     await sendCollectionEmail(fellow, fellowProjects, tokenValue, startDate);
+    await sleep(500);
   }
 
   return cycle.id;

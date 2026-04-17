@@ -6,6 +6,8 @@ import { getActiveCycle } from '@/lib/cycle';
 import { sendReminderEmail } from '@/lib/email';
 import { postPendingList } from '@/lib/slack';
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -38,6 +40,7 @@ export async function GET(req: NextRequest) {
       t.token,
       cycle.startDate
     );
+    await sleep(500);
   }
 
   if (dayOfWeek >= 3) {
