@@ -6,8 +6,8 @@ describe('normalizeToHoursPerDay', () => {
     expect(normalizeToHoursPerDay(4, 'per_day')).toBe(4);
   });
 
-  it('divides per_week by 5', () => {
-    expect(normalizeToHoursPerDay(10, 'per_week')).toBe(2);
+  it('divides per_week by 6', () => {
+    expect(normalizeToHoursPerDay(12, 'per_week')).toBe(2);
   });
 
   it('handles zero', () => {
@@ -16,8 +16,8 @@ describe('normalizeToHoursPerDay', () => {
 });
 
 describe('normalizeToHoursPerWeek', () => {
-  it('multiplies per_day by 5', () => {
-    expect(normalizeToHoursPerWeek(4, 'per_day')).toBe(20);
+  it('multiplies per_day by 6', () => {
+    expect(normalizeToHoursPerWeek(4, 'per_day')).toBe(24);
   });
 
   it('returns per_week values unchanged', () => {
@@ -29,7 +29,7 @@ describe('normalizeToHoursPerWeek', () => {
   });
 
   it('handles fractional hours', () => {
-    expect(normalizeToHoursPerWeek(1.5, 'per_day')).toBe(7.5);
+    expect(normalizeToHoursPerWeek(1.5, 'per_day')).toBe(9);
   });
 });
 

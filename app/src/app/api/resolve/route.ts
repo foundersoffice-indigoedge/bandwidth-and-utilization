@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { conflicts, submissions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { scoreHours } from '@/lib/scoring';
+import { scoreHours, WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
 import type { ConflictResolution, ProjectType } from '@/types';
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     .where(eq(submissions.id, conflict.vpSubmissionId))
     .limit(1);
 
-  const resolvedHoursPerWeek = resolvedHours * 5;
+  const resolvedHoursPerWeek = resolvedHours * WORKING_DAYS_PER_WEEK;
 
   if (vpSub) {
     const { score, meu } = scoreHours(resolvedHours, vpSub.projectType as ProjectType);

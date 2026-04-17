@@ -210,7 +210,7 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
                   {typeInfo.label}
                 </td>
                 <td className="p-2 text-center">{b.hoursPerDay}</td>
-                <td className="p-2 text-center">{b.hoursPerWeek != null ? b.hoursPerWeek.toFixed(1) : (b.hoursPerDay * 5).toFixed(1)}</td>
+                <td className="p-2 text-center">{b.hoursPerWeek != null ? b.hoursPerWeek.toFixed(1) : (b.hoursPerDay * 6).toFixed(1)}</td>
               </tr>
             );
           })}

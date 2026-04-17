@@ -1,11 +1,13 @@
 import type { ProjectType, HoursUnit } from '@/types';
 
+export const WORKING_DAYS_PER_WEEK = 6;
+
 export function normalizeToHoursPerDay(value: number, unit: HoursUnit): number {
-  return unit === 'per_week' ? value / 5 : value;
+  return unit === 'per_week' ? value / WORKING_DAYS_PER_WEEK : value;
 }
 
 export function normalizeToHoursPerWeek(value: number, unit: HoursUnit): number {
-  return unit === 'per_day' ? value * 5 : value;
+  return unit === 'per_day' ? value * WORKING_DAYS_PER_WEEK : value;
 }
 
 export function scoreHours(hoursPerDay: number, projectType: ProjectType): { score: number; meu: number } {

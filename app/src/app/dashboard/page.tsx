@@ -3,6 +3,7 @@ import { cycles, tokens, submissions, conflicts, snapshots } from '@/lib/db/sche
 import { and, eq, gte, lte, desc } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
 import { calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
+import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -94,7 +95,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
       const fellowSubs = subsByFellow.get(t.fellowRecordId) || [];
       if (fellowSubs.length === 0) return null;
 
-      const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * 5), 0);
+      const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
       const utilPct = calculateHoursUtilization(totalHpw);
       const tag = getLoadTag(utilPct) as string;
       const hasConflict = conflictFellowIds.has(t.fellowRecordId);
@@ -105,7 +106,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         score: s.autoScore,
         meu: s.autoMeu,
         hoursPerDay: s.hoursPerDay,
-        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * 5,
+        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
       }));
 
       return {
