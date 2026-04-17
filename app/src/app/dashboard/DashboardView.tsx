@@ -437,6 +437,8 @@ function formatDateRange(startDate: string): string {
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
+type LiveSortMode = 'designation' | 'load';
+
 function LiveCycleSection({
   liveCycle,
   onSelectFellow,
@@ -444,14 +446,15 @@ function LiveCycleSection({
   liveCycle: LiveCycleData;
   onSelectFellow: (id: string) => void;
 }) {
+  const [sortMode, setSortMode] = useState<LiveSortMode>('designation');
   const { submittedFellows, pendingFellows, pendingConflicts, startDate } = liveCycle;
   const total = submittedFellows.length + pendingFellows.length;
   const dateRange = formatDateRange(startDate);
 
-  // Sort by designation hierarchy, then alphabetically within each tier
-  const sorted = [...submittedFellows].sort((a, b) =>
-    compareByDesignationThenName(a.designation, a.fellowName, b.designation, b.fellowName)
-  );
+  const sorted = [...submittedFellows].sort((a, b) => {
+    if (sortMode === 'load') return b.hoursUtilizationPct - a.hoursUtilizationPct;
+    return compareByDesignationThenName(a.designation, a.fellowName, b.designation, b.fellowName);
+  });
 
   return (
     <div className="mb-8">
@@ -460,6 +463,21 @@ function LiveCycleSection({
         <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
           Live
         </span>
+        <div className="ml-auto flex items-center gap-1 text-xs text-gray-500">
+          Sort:
+          <button
+            onClick={() => setSortMode('designation')}
+            className={`px-2 py-0.5 rounded ${sortMode === 'designation' ? 'bg-gray-200 text-gray-800 font-medium' : 'hover:bg-gray-100'}`}
+          >
+            Designation
+          </button>
+          <button
+            onClick={() => setSortMode('load')}
+            className={`px-2 py-0.5 rounded ${sortMode === 'load' ? 'bg-gray-200 text-gray-800 font-medium' : 'hover:bg-gray-100'}`}
+          >
+            Load
+          </button>
+        </div>
       </div>
       <p className="text-sm text-gray-500 mb-4">
         {dateRange} · {submittedFellows.length} of {total} submitted
