@@ -51,6 +51,7 @@ export const conflicts = pgTable('conflicts', {
   resolvedHoursPerDay: real('resolved_hours_per_day'),
   resolvedBy: text('resolved_by'),
   resolutionToken: text('resolution_token'),
+  emailMessageId: text('email_message_id'),
 });
 
 export const snapshots = pgTable('snapshots', {

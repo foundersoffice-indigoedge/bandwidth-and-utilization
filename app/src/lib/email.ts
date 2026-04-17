@@ -5,10 +5,11 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
 const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 
-/** Send an email via Resend, throwing on failure (Resend SDK returns errors instead of throwing). */
-async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<void> {
-  const { error } = await resend.emails.send(params);
+/** Send an email via Resend, throwing on failure. Returns the Resend message ID. */
+async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<string | undefined> {
+  const { data, error } = await resend.emails.send(params);
   if (error) throw new Error(`Resend error: ${error.message}`);
+  return data?.id;
 }
 
 /** When TEST_EMAIL_OVERRIDE is set, redirect all recipients to that address. */
@@ -133,10 +134,10 @@ export async function sendConflictEmail(
   vpHours: number,
   associateHours: number,
   resolutionToken: string
-) {
+): Promise<string | undefined> {
   const appUrl = process.env.APP_URL;
 
-  await sendEmail({
+  return await sendEmail({
     from,
     to: overrideTo(vpEmail),
     cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
@@ -149,6 +150,44 @@ export async function sendConflictEmail(
         <a href="${appUrl}/resolve/${resolutionToken}?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">${associateName}'s number (${associateHours} hrs/day)</a>
         <a href="${appUrl}/resolve/${resolutionToken}?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (${vpHours} hrs/day)</a>
         <a href="${appUrl}/resolve/${resolutionToken}?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
+      </div>
+    `,
+  });
+}
+
+// --- Conflict Resolution Email (threads with original conflict email) ---
+export async function sendConflictResolutionEmail(
+  vpName: string,
+  vpEmail: string,
+  associateName: string,
+  associateEmail: string,
+  projectName: string,
+  resolvedHours: number,
+  resolvedBy: string,
+  originalMessageId?: string | null,
+) {
+  let resolverLabel: string;
+  if (resolvedBy === 'associate_number') resolverLabel = `${associateName}'s number`;
+  else if (resolvedBy === 'vp_number') resolverLabel = `${vpName}'s number`;
+  else resolverLabel = 'a custom number';
+
+  const headers: Record<string, string> = {};
+  if (originalMessageId) {
+    headers['In-Reply-To'] = originalMessageId;
+    headers['References'] = originalMessageId;
+  }
+
+  await sendEmail({
+    from,
+    to: overrideTo(vpEmail),
+    cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
+    subject: `Re: Bandwidth Conflict — ${projectName}`,
+    headers,
+    html: `
+      <div style="background:#f0fdf4;padding:16px 20px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#166534">Conflict Resolved</p>
+        <p style="margin:0;font-size:14px">The bandwidth conflict on <strong>${projectName}</strong> has been resolved.</p>
+        <p style="margin:8px 0 0;font-size:14px">Final value: <strong>${resolvedHours} hrs/day</strong> (${resolverLabel}).</p>
       </div>
     `,
   });

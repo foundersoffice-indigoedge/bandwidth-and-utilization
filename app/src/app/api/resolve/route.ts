@@ -3,7 +3,9 @@ import { db } from '@/lib/db';
 import { conflicts, submissions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { scoreHours, WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { sendConflictResolutionEmail } from '@/lib/email';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
+import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import type { ConflictResolution, ProjectType } from '@/types';
 
 export async function POST(req: NextRequest) {
@@ -72,6 +74,29 @@ export async function POST(req: NextRequest) {
       .update(submissions)
       .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score, autoMeu: meu })
       .where(eq(submissions.id, conflict.associateSubmissionId));
+  }
+
+  // Send resolution confirmation email (threads with original conflict email)
+  try {
+    const fellows = await fetchEligibleFellows();
+    const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
+    const vpFellow = vpSub ? fellowMap.get(vpSub.fellowRecordId) : null;
+    const assocFellow = assocSub ? fellowMap.get(assocSub.fellowRecordId) : null;
+
+    if (vpFellow && assocFellow && vpSub) {
+      await sendConflictResolutionEmail(
+        vpFellow.name,
+        vpFellow.email,
+        assocFellow.name,
+        assocFellow.email,
+        vpSub.projectName,
+        resolvedHours,
+        action,
+        conflict.emailMessageId,
+      );
+    }
+  } catch {
+    // Don't block resolution if the email fails
   }
 
   // Check if cycle is now complete
