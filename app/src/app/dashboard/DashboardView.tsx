@@ -36,6 +36,26 @@ const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   pitch: { label: 'Pitch', color: 'text-violet-700' },
 };
 
+/** Sort order: VP first, then AVP, Associate 3, 2, 1, Analyst. Alphabetical within each tier. */
+const DESIGNATION_RANK: Record<string, number> = {
+  VP: 0,
+  AVP: 1,
+  'Associate 3': 2,
+  'Associate 2': 3,
+  'Associate 1': 4,
+  Analyst: 5,
+};
+
+function compareByDesignationThenName(
+  aDesig: string, aName: string,
+  bDesig: string, bName: string,
+): number {
+  const aRank = DESIGNATION_RANK[aDesig] ?? 99;
+  const bRank = DESIGNATION_RANK[bDesig] ?? 99;
+  if (aRank !== bRank) return aRank - bRank;
+  return aName.localeCompare(bName);
+}
+
 /** Map a snapshot date to the IY month index (Jul=0, Aug=1, ... Jun=11). */
 function toMonthIdx(dateStr: string): number {
   const d = new Date(dateStr);
@@ -428,8 +448,10 @@ function LiveCycleSection({
   const total = submittedFellows.length + pendingFellows.length;
   const dateRange = formatDateRange(startDate);
 
-  // Sort submitted fellows by utilization descending
-  const sorted = [...submittedFellows].sort((a, b) => b.hoursUtilizationPct - a.hoursUtilizationPct);
+  // Sort by designation hierarchy, then alphabetically within each tier
+  const sorted = [...submittedFellows].sort((a, b) =>
+    compareByDesignationThenName(a.designation, a.fellowName, b.designation, b.fellowName)
+  );
 
   return (
     <div className="mb-8">
@@ -507,7 +529,7 @@ function LiveCycleSection({
           </summary>
           <div className="mt-2 flex flex-wrap gap-2">
             {pendingFellows
-              .sort((a, b) => a.name.localeCompare(b.name))
+              .sort((a, b) => compareByDesignationThenName(a.designation, a.name, b.designation, b.name))
               .map(f => (
                 <span key={f.name} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                   {f.name}
@@ -576,6 +598,7 @@ export function DashboardView({
   // Build overview data structures
   const fellowMonthSnaps = new Map<string, Map<number, SnapshotData[]>>();
   const fellowNames = new Map<string, string>();
+  const fellowDesignations = new Map<string, string>();
   const fellowAllSnapshots = new Map<string, SnapshotData[]>();
 
   for (const snap of snapshots) {
@@ -591,6 +614,7 @@ export function DashboardView({
     monthMap.set(monthIdx, list);
 
     fellowNames.set(snap.fellowRecordId, snap.fellowName);
+    fellowDesignations.set(snap.fellowRecordId, snap.designation);
 
     // For drill-down: keep all snapshots per fellow
     const all = fellowAllSnapshots.get(snap.fellowRecordId) || [];
@@ -599,7 +623,10 @@ export function DashboardView({
   }
 
   const fellowIds = Array.from(fellowMonthSnaps.keys()).sort((a, b) =>
-    (fellowNames.get(a) || '').localeCompare(fellowNames.get(b) || '')
+    compareByDesignationThenName(
+      fellowDesignations.get(a) || '', fellowNames.get(a) || '',
+      fellowDesignations.get(b) || '', fellowNames.get(b) || '',
+    )
   );
 
   // Live fellow drill-down
