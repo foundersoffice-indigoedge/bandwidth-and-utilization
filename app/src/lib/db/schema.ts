@@ -35,6 +35,7 @@ export const submissions = pgTable('submissions', {
   isSelfReport: boolean('is_self_report').notNull(),
   targetFellowId: text('target_fellow_id'),
   remarks: text('remarks'),
+  hoursPerWeek: real('hours_per_week'),
 });
 
 export const conflicts = pgTable('conflicts', {
@@ -64,4 +65,7 @@ export const snapshots = pgTable('snapshots', {
   loadTag: text('load_tag').notNull(),
   projectBreakdown: jsonb('project_breakdown').$type<ProjectBreakdownItem[]>().notNull(),
   snapshotDate: date('snapshot_date').notNull(),
+  totalHoursPerWeek: real('total_hours_per_week'),
+  hoursUtilizationPct: real('hours_utilization_pct'),
+  hoursLoadTag: text('hours_load_tag'),
 });

@@ -49,11 +49,13 @@ export async function POST(req: NextRequest) {
     .where(eq(submissions.id, conflict.vpSubmissionId))
     .limit(1);
 
+  const resolvedHoursPerWeek = resolvedHours * 5;
+
   if (vpSub) {
     const { score, meu } = scoreHours(resolvedHours, vpSub.projectType as ProjectType);
     await db
       .update(submissions)
-      .set({ hoursPerDay: resolvedHours, autoScore: score, autoMeu: meu })
+      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score, autoMeu: meu })
       .where(eq(submissions.id, conflict.vpSubmissionId));
   }
 
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
     const { score, meu } = scoreHours(resolvedHours, assocSub.projectType as ProjectType);
     await db
       .update(submissions)
-      .set({ hoursPerDay: resolvedHours, autoScore: score, autoMeu: meu })
+      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score, autoMeu: meu })
       .where(eq(submissions.id, conflict.associateSubmissionId));
   }
 

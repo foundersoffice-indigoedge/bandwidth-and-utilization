@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeToHoursPerDay, scoreHours } from '../src/lib/scoring';
+import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '../src/lib/scoring';
 
 describe('normalizeToHoursPerDay', () => {
   it('returns per_day values unchanged', () => {
@@ -12,6 +12,24 @@ describe('normalizeToHoursPerDay', () => {
 
   it('handles zero', () => {
     expect(normalizeToHoursPerDay(0, 'per_week')).toBe(0);
+  });
+});
+
+describe('normalizeToHoursPerWeek', () => {
+  it('multiplies per_day by 5', () => {
+    expect(normalizeToHoursPerWeek(4, 'per_day')).toBe(20);
+  });
+
+  it('returns per_week values unchanged', () => {
+    expect(normalizeToHoursPerWeek(10, 'per_week')).toBe(10);
+  });
+
+  it('handles zero', () => {
+    expect(normalizeToHoursPerWeek(0, 'per_day')).toBe(0);
+  });
+
+  it('handles fractional hours', () => {
+    expect(normalizeToHoursPerWeek(1.5, 'per_day')).toBe(7.5);
   });
 });
 

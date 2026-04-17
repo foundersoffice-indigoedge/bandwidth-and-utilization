@@ -25,6 +25,9 @@ export interface SnapshotData {
   loadTag: string;
   projectBreakdown: ProjectBreakdownItem[];
   snapshotDate: string;
+  totalHoursPerWeek: number | null;
+  hoursUtilizationPct: number | null;
+  hoursLoadTag: string | null;
 }
 
 export default async function DashboardPage({
@@ -57,6 +60,9 @@ export default async function DashboardPage({
     loadTag: s.loadTag,
     projectBreakdown: s.projectBreakdown,
     snapshotDate: s.snapshotDate,
+    totalHoursPerWeek: s.totalHoursPerWeek,
+    hoursUtilizationPct: s.hoursUtilizationPct,
+    hoursLoadTag: s.hoursLoadTag,
   }));
 
   // Compute available IYs for the selector

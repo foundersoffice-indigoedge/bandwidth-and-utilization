@@ -86,7 +86,6 @@ export async function sendCollectionEmail(
   await resend.emails.send({
     from,
     to: overrideTo(fellow.email),
-    cc: standardCc(),
     subject: `Bandwidth Update — ${dateRange}`,
     html: `
       <p>Hi ${fellow.name},</p>
@@ -109,7 +108,6 @@ export async function sendReminderEmail(
   await resend.emails.send({
     from,
     to: overrideTo(fellow.email),
-    cc: standardCc(),
     subject: 'Reminder: Bandwidth Update Pending',
     html: `
       <p>Hi ${fellow.name},</p>
@@ -157,6 +155,7 @@ export interface FellowSummary {
   utilizationPct: number;
   loadTag: string;
   projectCount: number;
+  totalHoursPerWeek?: number;
 }
 
 const LOAD_TAG_COLORS: Record<string, { bg: string; text: string }> = {
@@ -186,10 +185,12 @@ export async function sendCompletionEmail(
     .map((f, i) => {
       const rowBg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
       const pct = Math.round(f.utilizationPct * 100);
+      const hpw = f.totalHoursPerWeek != null ? f.totalHoursPerWeek.toFixed(1) : '—';
       const tagColors = LOAD_TAG_COLORS[f.loadTag] || { bg: '#f3f4f6', text: '#374151' };
       return `<tr style="background:${rowBg}">
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500">${f.name}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${f.designation}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${hpw} / 84</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;text-align:center">${pct}%</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center"><span style="background:${tagColors.bg};color:${tagColors.text};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${f.loadTag}</span></td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${f.projectCount}</td>
@@ -204,6 +205,7 @@ export async function sendCompletionEmail(
         <tr style="background:#f3f4f6">
           <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Fellow</th>
           <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Role</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Hrs/Week</th>
           <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Utilization</th>
           <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Load</th>
           <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Projects</th>

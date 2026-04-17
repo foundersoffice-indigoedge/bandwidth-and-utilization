@@ -38,4 +38,5 @@ export interface ProjectBreakdownItem {
   score: number;
   meu: number;
   hoursPerDay: number;
+  hoursPerWeek: number;
 }

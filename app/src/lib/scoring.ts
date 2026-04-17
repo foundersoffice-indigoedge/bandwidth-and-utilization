@@ -4,6 +4,10 @@ export function normalizeToHoursPerDay(value: number, unit: HoursUnit): number {
   return unit === 'per_week' ? value / 5 : value;
 }
 
+export function normalizeToHoursPerWeek(value: number, unit: HoursUnit): number {
+  return unit === 'per_day' ? value * 5 : value;
+}
+
 export function scoreHours(hoursPerDay: number, projectType: ProjectType): { score: number; meu: number } {
   if (projectType === 'mandate') return scoreMandateHours(hoursPerDay);
   return scoreDdePitchHours(hoursPerDay);

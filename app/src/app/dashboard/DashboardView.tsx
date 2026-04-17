@@ -140,9 +140,8 @@ function OverviewGrid({
                     return <td key={idx} className="border p-2 text-center text-gray-300">—</td>;
                   }
                   const n = snaps.length;
-                  const avgUtil = snaps.reduce((s, snap) => s + snap.utilizationPct, 0) / n;
-                  const avgMeu = snaps.reduce((s, snap) => s + snap.totalMeu, 0) / n;
-                  const avgCap = snaps.reduce((s, snap) => s + snap.capacityMeu, 0) / n;
+                  const avgUtil = snaps.reduce((s, snap) => s + (snap.hoursUtilizationPct ?? snap.utilizationPct), 0) / n;
+                  const avgHpw = snaps.reduce((s, snap) => s + (snap.totalHoursPerWeek ?? 0), 0) / n;
                   const tag = getLoadTag(avgUtil);
                   return (
                     <td
@@ -151,7 +150,7 @@ function OverviewGrid({
                     >
                       <div className="font-medium">{Math.round(avgUtil * 100)}%</div>
                       <div className="text-[10px] opacity-75">
-                        {avgMeu.toFixed(2)}/{avgCap.toFixed(1)}
+                        {avgHpw.toFixed(1)} / 84 hrs
                       </div>
                     </td>
                   );
@@ -177,9 +176,8 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
           <tr className="bg-gray-50">
             <th className="p-2 text-left">Project</th>
             <th className="p-2 text-center">Type</th>
-            <th className="p-2 text-center">Score</th>
-            <th className="p-2 text-center">MEU</th>
             <th className="p-2 text-center">Hrs/Day</th>
+            <th className="p-2 text-center">Hrs/Week</th>
           </tr>
         </thead>
         <tbody>
@@ -191,9 +189,8 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
                 <td className={`p-2 text-center uppercase text-[11px] font-medium ${typeInfo.color}`}>
                   {typeInfo.label}
                 </td>
-                <td className="p-2 text-center">{b.score}</td>
-                <td className="p-2 text-center">{b.meu.toFixed(2)}</td>
                 <td className="p-2 text-center">{b.hoursPerDay}</td>
+                <td className="p-2 text-center">{b.hoursPerWeek != null ? b.hoursPerWeek.toFixed(1) : (b.hoursPerDay * 5).toFixed(1)}</td>
               </tr>
             );
           })}
@@ -232,7 +229,6 @@ function DrillDown({
 
   const fellowName = fellowSnapshots[0].fellowName;
   const designation = fellowSnapshots[0].designation;
-  const capacityMeu = fellowSnapshots[0].capacityMeu;
 
   // Group snapshots by month for week mapping and monthly averages
   const monthSnapshots = new Map<number, SnapshotData[]>();
@@ -283,7 +279,7 @@ function DrillDown({
       <div className="mt-4 mb-6">
         <h2 className="text-xl font-bold">{fellowName}</h2>
         <p className="text-sm text-gray-500">
-          {designation} · Capacity: {capacityMeu} MEU · IY{iy}
+          {designation} · Capacity: 84 hrs/week · IY{iy}
         </p>
       </div>
 
@@ -292,7 +288,7 @@ function DrillDown({
           <tr className="bg-gray-50">
             <th className="border p-2 text-left">Month</th>
             <th className="border p-2 text-center">Utilization</th>
-            <th className="border p-2 text-center">MEU</th>
+            <th className="border p-2 text-center">Hrs/Week</th>
             <th className="border p-2 text-center">Mandates</th>
             <th className="border p-2 text-center">DDEs</th>
             <th className="border p-2 text-center">Pitches</th>
@@ -315,9 +311,8 @@ function DrillDown({
 
             // Average across all snapshots in this month
             const n = snaps.length;
-            const avgUtil = snaps.reduce((s, snap) => s + snap.utilizationPct, 0) / n;
-            const avgMeu = snaps.reduce((s, snap) => s + snap.totalMeu, 0) / n;
-            const avgCap = snaps.reduce((s, snap) => s + snap.capacityMeu, 0) / n;
+            const avgUtil = snaps.reduce((s, snap) => s + (snap.hoursUtilizationPct ?? snap.utilizationPct), 0) / n;
+            const avgHpw = snaps.reduce((s, snap) => s + (snap.totalHoursPerWeek ?? 0), 0) / n;
             const avgMandates = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'mandate').length, 0) / n;
             const avgDdes = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'dde').length, 0) / n;
             const avgPitches = snaps.reduce((s, snap) => s + snap.projectBreakdown.filter(b => b.projectType === 'pitch').length, 0) / n;
@@ -340,7 +335,7 @@ function DrillDown({
                   {Math.round(avgUtil * 100)}%
                 </td>
                 <td className="border p-2 text-center">
-                  {avgMeu.toFixed(2)} / {avgCap.toFixed(1)}
+                  {avgHpw.toFixed(1)} / 84
                 </td>
                 <td className="border p-2 text-center">{avgMandates % 1 === 0 ? avgMandates : avgMandates.toFixed(1)}</td>
                 <td className="border p-2 text-center">{avgDdes % 1 === 0 ? avgDdes : avgDdes.toFixed(1)}</td>
@@ -380,11 +375,11 @@ function DrillDown({
                       <span className="mr-1.5 text-gray-400 text-[10px]">{weekExpanded ? '▼' : '▶'}</span>
                       {week.label}
                     </td>
-                    <td className={`border p-2 text-center text-xs ${getLoadColor(weekSnap.loadTag)}`}>
-                      {Math.round(weekSnap.utilizationPct * 100)}%
+                    <td className={`border p-2 text-center text-xs ${getLoadColor(weekSnap.hoursLoadTag ?? weekSnap.loadTag)}`}>
+                      {Math.round((weekSnap.hoursUtilizationPct ?? weekSnap.utilizationPct) * 100)}%
                     </td>
                     <td className="border p-2 text-center text-xs">
-                      {weekSnap.totalMeu.toFixed(2)} / {weekSnap.capacityMeu.toFixed(1)}
+                      {(weekSnap.totalHoursPerWeek ?? 0).toFixed(1)} / 84
                     </td>
                     <td className="border p-2 text-center text-xs">{wMandates}</td>
                     <td className="border p-2 text-center text-xs">{wDdes}</td>

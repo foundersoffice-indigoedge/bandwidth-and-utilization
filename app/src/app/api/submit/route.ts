@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tokens, submissions, conflicts } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { normalizeToHoursPerDay, scoreHours } from '@/lib/scoring';
+import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
 import { sendConflictEmail } from '@/lib/email';
 import { postRemark } from '@/lib/slack';
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     if (!project) continue;
 
     const hoursPerDay = normalizeToHoursPerDay(entry.hoursValue, entry.hoursUnit);
+    const hoursPerWeek = normalizeToHoursPerWeek(entry.hoursValue, entry.hoursUnit);
     const { score, meu } = scoreHours(hoursPerDay, project.projectType);
     const isSelfReport = entry.targetFellowId === null;
 
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest) {
         hoursValue: entry.hoursValue,
         hoursUnit: entry.hoursUnit,
         hoursPerDay,
+        hoursPerWeek,
         autoScore: score,
         autoMeu: meu,
         isSelfReport,

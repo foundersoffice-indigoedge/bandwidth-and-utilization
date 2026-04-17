@@ -5,7 +5,7 @@ import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { generateNarrative, writeBandwidthToAirtable } from '@/lib/airtable/writeback';
-import { sumMeu, calculateUtilization, getLoadTag } from '@/lib/utilization';
+import { sumMeu, calculateUtilization, getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
 export { isCycleMonday } from '@/lib/schedule';
 
@@ -143,12 +143,18 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     const utilPct = calculateUtilization(totalMeu, fellow.capacityMeu);
     const loadTag = getLoadTag(utilPct);
 
+    // Hours-based utilization (new method)
+    const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * 5), 0);
+    const hoursUtilPct = calculateHoursUtilization(totalHpw);
+    const hoursTag = getLoadTag(hoursUtilPct);
+
     const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => ({
       projectName: s.projectName,
       projectType: s.projectType as ProjectType,
       score: s.autoScore,
       meu: s.autoMeu,
       hoursPerDay: s.hoursPerDay,
+      hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * 5,
     }));
 
     await db.insert(snapshots).values({
@@ -162,14 +168,18 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       loadTag,
       projectBreakdown: breakdown,
       snapshotDate: dateStr,
+      totalHoursPerWeek: totalHpw,
+      hoursUtilizationPct: hoursUtilPct,
+      hoursLoadTag: hoursTag,
     });
 
     fellowSummaries.push({
       name: fellow.name,
       designation: fellow.designation,
-      utilizationPct: utilPct,
-      loadTag,
+      utilizationPct: hoursUtilPct,
+      loadTag: hoursTag,
       projectCount: fellowSubs.length,
+      totalHoursPerWeek: totalHpw,
     });
   }
 
