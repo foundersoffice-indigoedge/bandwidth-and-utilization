@@ -1,8 +1,9 @@
 import { db } from '@/lib/db';
-import { snapshots } from '@/lib/db/schema';
-import { and, gte, lte } from 'drizzle-orm';
+import { cycles, tokens, submissions, conflicts, snapshots } from '@/lib/db/schema';
+import { and, eq, gte, lte, desc } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
-import type { ProjectBreakdownItem } from '@/types';
+import { calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
+import type { ProjectBreakdownItem, ProjectType } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,105 @@ export interface SnapshotData {
   hoursLoadTag: string | null;
 }
 
+export interface LiveFellowData {
+  fellowRecordId: string;
+  fellowName: string;
+  designation: string;
+  totalHoursPerWeek: number;
+  hoursUtilizationPct: number;
+  loadTag: string;
+  projectBreakdown: ProjectBreakdownItem[];
+  hasConflict: boolean;
+}
+
+type LiveFellowResult = LiveFellowData | null;
+
+export interface LiveCycleData {
+  cycleId: string;
+  startDate: string;
+  submittedFellows: LiveFellowData[];
+  pendingFellows: { name: string; designation: string }[];
+  pendingConflicts: number;
+}
+
+async function getLiveCycleData(): Promise<LiveCycleData | null> {
+  const [activeCycle] = await db
+    .select()
+    .from(cycles)
+    .where(eq(cycles.status, 'collecting'))
+    .orderBy(desc(cycles.createdAt))
+    .limit(1);
+
+  if (!activeCycle) return null;
+
+  const [allTokens, allSubs, allConflicts] = await Promise.all([
+    db.select().from(tokens).where(eq(tokens.cycleId, activeCycle.id)),
+    db.select().from(submissions).where(
+      and(eq(submissions.cycleId, activeCycle.id), eq(submissions.isSelfReport, true))
+    ),
+    db.select().from(conflicts).where(eq(conflicts.cycleId, activeCycle.id)),
+  ]);
+
+  const pendingConflicts = allConflicts.filter(c => c.status === 'pending');
+  const conflictFellowIds = new Set<string>();
+  // Find which fellows are involved in pending conflicts
+  for (const c of pendingConflicts) {
+    const relatedSubs = allSubs.filter(s => s.projectRecordId === c.projectRecordId);
+    for (const s of relatedSubs) conflictFellowIds.add(s.fellowRecordId);
+  }
+
+  const submittedTokens = allTokens.filter(t => t.status === 'submitted');
+  const pendingTokens = allTokens.filter(t => t.status === 'pending');
+
+  // Group submissions by fellow
+  const subsByFellow = new Map<string, typeof allSubs>();
+  for (const sub of allSubs) {
+    const list = subsByFellow.get(sub.fellowRecordId) || [];
+    list.push(sub);
+    subsByFellow.set(sub.fellowRecordId, list);
+  }
+
+  const submittedFellows: LiveFellowData[] = submittedTokens
+    .map((t): LiveFellowResult => {
+      const fellowSubs = subsByFellow.get(t.fellowRecordId) || [];
+      if (fellowSubs.length === 0) return null;
+
+      const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * 5), 0);
+      const utilPct = calculateHoursUtilization(totalHpw);
+      const tag = getLoadTag(utilPct) as string;
+      const hasConflict = conflictFellowIds.has(t.fellowRecordId);
+
+      const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => ({
+        projectName: s.projectName,
+        projectType: s.projectType as ProjectType,
+        score: s.autoScore,
+        meu: s.autoMeu,
+        hoursPerDay: s.hoursPerDay,
+        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * 5,
+      }));
+
+      return {
+        fellowRecordId: t.fellowRecordId,
+        fellowName: t.fellowName,
+        designation: t.fellowDesignation,
+        totalHoursPerWeek: totalHpw,
+        hoursUtilizationPct: utilPct,
+        loadTag: tag,
+        projectBreakdown: breakdown,
+        hasConflict,
+      };
+    })
+    .filter((f): f is LiveFellowData => f !== null);
+
+  return {
+    cycleId: activeCycle.id,
+    startDate: activeCycle.startDate,
+    submittedFellows,
+    pendingFellows: pendingTokens.map(t => ({ name: t.fellowName, designation: t.fellowDesignation })),
+    pendingConflicts: pendingConflicts.length,
+  };
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -42,10 +142,13 @@ export default async function DashboardPage({
   const iy = iyParam ? parseInt(iyParam) : defaultIy;
   const { start, end } = getIyRange(iy);
 
-  const allSnapshots = await db
-    .select()
-    .from(snapshots)
-    .where(and(gte(snapshots.snapshotDate, start), lte(snapshots.snapshotDate, end)));
+  const [allSnapshots, liveCycle] = await Promise.all([
+    db
+      .select()
+      .from(snapshots)
+      .where(and(gte(snapshots.snapshotDate, start), lte(snapshots.snapshotDate, end))),
+    getLiveCycleData(),
+  ]);
 
   // Serialize for client component
   const snapshotData: SnapshotData[] = allSnapshots.map(s => ({
@@ -96,7 +199,7 @@ export default async function DashboardPage({
         </form>
       </div>
 
-      <DashboardView snapshots={snapshotData} iy={iy} />
+      <DashboardView snapshots={snapshotData} iy={iy} liveCycle={liveCycle} />
     </main>
   );
 }

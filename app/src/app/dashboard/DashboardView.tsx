@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { SnapshotData } from './page';
+import type { SnapshotData, LiveCycleData, LiveFellowData } from './page';
 import type { ProjectBreakdownItem } from '@/types';
 
 const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
@@ -408,16 +408,170 @@ function DrillDown({
   );
 }
 
+// --- Live Cycle Section ---
+
+function formatDateRange(startDate: string): string {
+  const start = new Date(startDate);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 13);
+  return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+function LiveCycleSection({
+  liveCycle,
+  onSelectFellow,
+}: {
+  liveCycle: LiveCycleData;
+  onSelectFellow: (id: string) => void;
+}) {
+  const { submittedFellows, pendingFellows, pendingConflicts, startDate } = liveCycle;
+  const total = submittedFellows.length + pendingFellows.length;
+  const dateRange = formatDateRange(startDate);
+
+  // Sort submitted fellows by utilization descending
+  const sorted = [...submittedFellows].sort((a, b) => b.hoursUtilizationPct - a.hoursUtilizationPct);
+
+  return (
+    <div className="mb-8">
+      <div className="flex items-center gap-3 mb-3">
+        <h2 className="text-lg font-semibold">Current Cycle</h2>
+        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+          Live
+        </span>
+      </div>
+      <p className="text-sm text-gray-500 mb-4">
+        {dateRange} · {submittedFellows.length} of {total} submitted
+        {pendingConflicts > 0 && ` · ${pendingConflicts} conflict${pendingConflicts !== 1 ? 's' : ''} pending`}
+      </p>
+
+      {sorted.length > 0 && (
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border p-2 text-left">Fellow</th>
+                <th className="border p-2 text-left">Role</th>
+                <th className="border p-2 text-center">Hrs/Week</th>
+                <th className="border p-2 text-center">Utilization</th>
+                <th className="border p-2 text-center">Load</th>
+                <th className="border p-2 text-center">Mandates</th>
+                <th className="border p-2 text-center">DDEs</th>
+                <th className="border p-2 text-center">Pitches</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((f, i) => {
+                const mandates = f.projectBreakdown.filter(b => b.projectType === 'mandate').length;
+                const ddes = f.projectBreakdown.filter(b => b.projectType === 'dde').length;
+                const pitches = f.projectBreakdown.filter(b => b.projectType === 'pitch').length;
+                return (
+                  <tr key={f.fellowRecordId} className={i % 2 === 0 ? '' : 'bg-gray-50/50'}>
+                    <td className="border p-2 font-medium">
+                      <button
+                        onClick={() => onSelectFellow(f.fellowRecordId)}
+                        className="text-blue-600 hover:underline text-left"
+                      >
+                        {f.fellowName}
+                      </button>
+                      {f.hasConflict && (
+                        <span className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded" title="Has pending conflict">
+                          conflict
+                        </span>
+                      )}
+                    </td>
+                    <td className="border p-2 text-gray-600 text-xs">{f.designation}</td>
+                    <td className="border p-2 text-center">{f.totalHoursPerWeek.toFixed(1)} / 84</td>
+                    <td className={`border p-2 text-center font-medium ${getLoadColor(f.loadTag)}`}>
+                      {Math.round(f.hoursUtilizationPct * 100)}%
+                    </td>
+                    <td className="border p-2 text-center">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${getLoadColor(f.loadTag)}`}>
+                        {f.loadTag}
+                      </span>
+                    </td>
+                    <td className="border p-2 text-center">{mandates}</td>
+                    <td className="border p-2 text-center">{ddes}</td>
+                    <td className="border p-2 text-center">{pitches}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pendingFellows.length > 0 && (
+        <details className="text-sm">
+          <summary className="text-gray-500 cursor-pointer hover:text-gray-700">
+            {pendingFellows.length} pending
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {pendingFellows
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(f => (
+                <span key={f.name} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                  {f.name}
+                </span>
+              ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+// --- Live Fellow Drill-Down ---
+
+function LiveDrillDown({
+  fellow,
+  onBack,
+}: {
+  fellow: LiveFellowData;
+  onBack: () => void;
+}) {
+  return (
+    <div>
+      <button onClick={onBack} className="text-sm text-blue-600 hover:underline">
+        ← Back to overview
+      </button>
+
+      <div className="mt-4 mb-2 flex items-center gap-3">
+        <h2 className="text-xl font-bold">{fellow.fellowName}</h2>
+        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+          Live
+        </span>
+      </div>
+      <p className="text-sm text-gray-500 mb-6">
+        {fellow.designation} · Capacity: 84 hrs/week ·{' '}
+        <span className="font-medium">{fellow.totalHoursPerWeek.toFixed(1)} hrs/week</span> ·{' '}
+        <span className={`font-medium ${getLoadColor(fellow.loadTag)} px-1.5 rounded`}>
+          {Math.round(fellow.hoursUtilizationPct * 100)}% — {fellow.loadTag}
+        </span>
+        {fellow.hasConflict && (
+          <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+            has pending conflict
+          </span>
+        )}
+      </p>
+
+      <ProjectBreakdownTable breakdown={fellow.projectBreakdown} />
+    </div>
+  );
+}
+
 // --- Main Dashboard View ---
 
 export function DashboardView({
   snapshots,
   iy,
+  liveCycle,
 }: {
   snapshots: SnapshotData[];
   iy: number;
+  liveCycle: LiveCycleData | null;
 }) {
   const [selectedFellow, setSelectedFellow] = useState<string | null>(null);
+  const [selectedLiveFellow, setSelectedLiveFellow] = useState<string | null>(null);
 
   // Build overview data structures
   const fellowMonthSnaps = new Map<string, Map<number, SnapshotData[]>>();
@@ -448,6 +602,20 @@ export function DashboardView({
     (fellowNames.get(a) || '').localeCompare(fellowNames.get(b) || '')
   );
 
+  // Live fellow drill-down
+  if (selectedLiveFellow && liveCycle) {
+    const liveFellow = liveCycle.submittedFellows.find(f => f.fellowRecordId === selectedLiveFellow);
+    if (liveFellow) {
+      return (
+        <LiveDrillDown
+          fellow={liveFellow}
+          onBack={() => setSelectedLiveFellow(null)}
+        />
+      );
+    }
+  }
+
+  // Finalized fellow drill-down
   if (selectedFellow) {
     return (
       <DrillDown
@@ -460,11 +628,19 @@ export function DashboardView({
   }
 
   return (
-    <OverviewGrid
-      fellowIds={fellowIds}
-      fellowNames={fellowNames}
-      fellowMonthSnaps={fellowMonthSnaps}
-      onSelectFellow={setSelectedFellow}
-    />
+    <>
+      {liveCycle && liveCycle.submittedFellows.length > 0 && (
+        <LiveCycleSection
+          liveCycle={liveCycle}
+          onSelectFellow={(id) => setSelectedLiveFellow(id)}
+        />
+      )}
+      <OverviewGrid
+        fellowIds={fellowIds}
+        fellowNames={fellowNames}
+        fellowMonthSnaps={fellowMonthSnaps}
+        onSelectFellow={setSelectedFellow}
+      />
+    </>
   );
 }
