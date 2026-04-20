@@ -44,4 +44,5 @@ export interface ProjectBreakdownItem {
   hoursPerWeek: number;
   isVpRun?: boolean;
   leadFellowName?: string;
+  hasConflict?: boolean;
 }

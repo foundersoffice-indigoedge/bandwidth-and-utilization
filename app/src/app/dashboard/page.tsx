@@ -109,6 +109,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
   ]);
 
   const pendingConflicts = allConflicts.filter(c => c.status === 'pending');
+  const conflictProjectIds = new Set(pendingConflicts.map(c => c.projectRecordId));
   const conflictFellowIds = new Set<string>();
   // Find which fellows are involved in pending conflicts
   for (const c of pendingConflicts) {
@@ -144,6 +145,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         meu: s.autoMeu,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
+        hasConflict: conflictProjectIds.has(s.projectRecordId),
       }));
 
       return {

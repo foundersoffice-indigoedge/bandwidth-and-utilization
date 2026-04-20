@@ -253,6 +253,11 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
                 <td className="p-2">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span>{b.projectName}</span>
+                    {b.hasConflict && (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-medium" title="Pending bandwidth conflict on this project">
+                        conflict pending
+                      </span>
+                    )}
                     {b.isVpRun && (
                       <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-medium">
                         VP-run{b.leadFellowName ? ` · Led by ${b.leadFellowName}` : ''}
