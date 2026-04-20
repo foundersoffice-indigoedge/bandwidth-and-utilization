@@ -52,6 +52,8 @@ export const conflicts = pgTable('conflicts', {
   resolvedBy: text('resolved_by'),
   resolutionToken: text('resolution_token'),
   emailMessageId: text('email_message_id'),
+  lastReminderSentAt: timestamp('last_reminder_sent_at'),
+  isAdHoc: boolean('is_ad_hoc').notNull().default(false),
 });
 
 export const snapshots = pgTable('snapshots', {
@@ -69,4 +71,27 @@ export const snapshots = pgTable('snapshots', {
   totalHoursPerWeek: real('total_hours_per_week'),
   hoursUtilizationPct: real('hours_utilization_pct'),
   hoursLoadTag: text('hours_load_tag'),
+});
+
+export const adHocProjects = pgTable('ad_hoc_projects', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),
+  type: text('type', { enum: ['mandate', 'dde', 'pitch'] }).notNull(),
+  name: text('name').notNull(),
+  directorRecordId: text('director_record_id'),
+  directorName: text('director_name'),
+  teammateRecordIds: jsonb('teammate_record_ids').$type<string[]>().notNull(),
+  createdByFellowId: text('created_by_fellow_id').notNull(),
+  createdByFellowName: text('created_by_fellow_name').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  status: text('status', { enum: ['active', 'linked', 'superseded'] }).notNull().default('active'),
+  linkedAirtableRecordId: text('linked_airtable_record_id'),
+  linkedAt: timestamp('linked_at'),
+});
+
+export const conflictRemindersSent = pgTable('conflict_reminders_sent', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  conflictId: uuid('conflict_id').references(() => conflicts.id).notNull(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  resendMessageId: text('resend_message_id'),
 });
