@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isCycleMonday, startCycle, getActiveCycle } from '@/lib/cycle';
+import { isCycleMonday, startCycle, finalizeStaleCycles } from '@/lib/cycle';
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -14,14 +14,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'Not a cycle Monday, skipping' });
   }
 
-  const active = await getActiveCycle();
-  if (active) {
-    return NextResponse.json({ message: 'Cycle already active, skipping' });
-  }
+  const finalizedIds = await finalizeStaleCycles();
 
   const fellowsParam = req.nextUrl.searchParams.get('fellows');
   const testFellowIds = fellowsParam ? fellowsParam.split(',') : undefined;
 
   const cycleId = await startCycle(testFellowIds);
-  return NextResponse.json({ message: 'Cycle started', cycleId, testMode: !!testFellowIds });
+  return NextResponse.json({
+    message: 'Cycle started',
+    cycleId,
+    finalizedStale: finalizedIds,
+    testMode: !!testFellowIds,
+  });
 }

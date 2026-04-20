@@ -77,6 +77,37 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
   await finalizeCycle(cycleId);
 }
 
+export async function finalizeStaleCycles(): Promise<string[]> {
+  const staleCycles = await db
+    .select()
+    .from(cycles)
+    .where(eq(cycles.status, 'collecting'));
+
+  const finalizedIds: string[] = [];
+  for (const cycle of staleCycles) {
+    const pendingConflicts = await db
+      .select()
+      .from(conflicts)
+      .where(and(eq(conflicts.cycleId, cycle.id), eq(conflicts.status, 'pending')));
+
+    for (const conflict of pendingConflicts) {
+      await db
+        .update(conflicts)
+        .set({
+          status: 'resolved' as const,
+          resolvedHoursPerDay: conflict.vpHoursPerDay,
+          resolvedBy: 'system-auto-close',
+        })
+        .where(eq(conflicts.id, conflict.id));
+    }
+
+    await finalizeCycle(cycle.id);
+    finalizedIds.push(cycle.id);
+  }
+
+  return finalizedIds;
+}
+
 async function finalizeCycle(cycleId: string): Promise<void> {
   const [cycle] = await db.select().from(cycles).where(eq(cycles.id, cycleId)).limit(1);
   if (!cycle || cycle.status === 'complete') return;
