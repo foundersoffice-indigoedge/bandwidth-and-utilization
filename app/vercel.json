@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/send-reminders",
       "schedule": "30 3 * * 2-5"
+    },
+    {
+      "path": "/api/cron/conflict-reminders",
+      "schedule": "30 4 * * *"
     }
   ]
 }

@@ -193,6 +193,45 @@ export async function sendConflictResolutionEmail(
   });
 }
 
+// --- Conflict Reminder Email (threads with original conflict email) ---
+export async function sendConflictReminderEmail(
+  vpName: string,
+  vpEmail: string,
+  associateName: string,
+  associateEmail: string,
+  projectName: string,
+  vpHours: number,
+  associateHours: number,
+  resolutionToken: string,
+  originalMessageId: string,
+): Promise<string | undefined> {
+  const appUrl = process.env.APP_URL;
+
+  return await sendEmail({
+    from,
+    to: overrideTo(vpEmail),
+    cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
+    subject: `Reminder: Bandwidth Conflict — ${projectName}`,
+    headers: {
+      'In-Reply-To': originalMessageId,
+      'References': originalMessageId,
+    },
+    html: `
+      <div style="background:#fef3c7;padding:16px 20px;border-radius:8px;border-left:4px solid #d97706;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#92400e">Conflict Still Pending</p>
+        <p style="margin:0;font-size:14px">Hi ${vpName}, the bandwidth conflict on <strong>${projectName}</strong> is still unresolved.</p>
+      </div>
+      <p>On <strong>${projectName}</strong>, you reported ${associateName} will spend <strong>${vpHours} hrs/day</strong>, but ${associateName} reported <strong>${associateHours} hrs/day</strong>.</p>
+      <p>Please resolve:</p>
+      <div style="margin:16px 0">
+        <a href="${appUrl}/resolve/${resolutionToken}?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">${associateName}'s number (${associateHours} hrs/day)</a>
+        <a href="${appUrl}/resolve/${resolutionToken}?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (${vpHours} hrs/day)</a>
+        <a href="${appUrl}/resolve/${resolutionToken}?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
+      </div>
+    `,
+  });
+}
+
 // --- Completion Report Email ---
 export interface FellowSummary {
   name: string;
