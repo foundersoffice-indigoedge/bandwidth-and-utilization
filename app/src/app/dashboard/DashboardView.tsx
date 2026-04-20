@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import type { SnapshotData, LiveCycleData, LiveFellowData } from './page';
 import type { ProjectBreakdownItem } from '@/types';
 import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
-import { CYCLE_LENGTH_DAYS } from '@/lib/schedule';
+import { getCycleEndDate } from '@/lib/schedule';
 
 const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
@@ -85,11 +85,9 @@ function getWeekRanges(monthIdx: number, iy: number): { label: string; start: Da
 }
 
 /**
- * Find which snapshot covers a given week.
- * Uses +13 day coverage so historical biweekly snapshots still map correctly.
- * Under weekly cadence this overlaps the next week too, but the latest-wins
- * tiebreaker plus the strict `weekEnd >= cycleStart` check ensures each week
- * picks its own Monday's snapshot.
+ * Return the snapshot whose cycle starts within the given week, or null.
+ * A week only renders data once a cycle has actually been collected for it —
+ * biweekly cycles no longer bleed into the empty week that follows.
  */
 function findSnapshotForWeek(
   weekStart: Date,
@@ -100,12 +98,7 @@ function findSnapshotForWeek(
 
   for (const snap of snaps) {
     const cycleStart = new Date(snap.snapshotDate);
-    const cycleEnd = new Date(cycleStart);
-    cycleEnd.setDate(cycleEnd.getDate() + 13);
-    cycleEnd.setHours(23, 59, 59);
-
-    // Week and cycle overlap if week starts before cycle ends AND week ends after cycle starts
-    if (weekStart <= cycleEnd && weekEnd >= cycleStart) {
+    if (cycleStart >= weekStart && cycleStart <= weekEnd) {
       if (!best || snap.snapshotDate > best.snapshotDate) {
         best = snap;
       }
@@ -493,8 +486,7 @@ function DrillDown({
 
 function formatDateRange(startDate: string): string {
   const start = new Date(startDate);
-  const end = new Date(start);
-  end.setDate(end.getDate() + (CYCLE_LENGTH_DAYS - 1));
+  const end = getCycleEndDate(start);
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 

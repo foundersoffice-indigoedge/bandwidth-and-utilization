@@ -5,7 +5,7 @@ import { eq, and } from 'drizzle-orm';
 import { getActiveCycle } from '@/lib/cycle';
 import { sendReminderEmail } from '@/lib/email';
 import { postPendingList } from '@/lib/slack';
-import { CYCLE_LENGTH_DAYS } from '@/lib/schedule';
+import { getCycleEndDate } from '@/lib/schedule';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -46,8 +46,7 @@ export async function GET(req: NextRequest) {
 
   if (dayOfWeek >= 3) {
     const startDate = new Date(cycle.startDate);
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + (CYCLE_LENGTH_DAYS - 1));
+    const endDate = getCycleEndDate(startDate);
     const dateRange = `${startDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     await postPendingList(

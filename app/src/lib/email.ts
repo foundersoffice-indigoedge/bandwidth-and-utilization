@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
-import { CYCLE_LENGTH_DAYS } from '@/lib/schedule';
+import { getCycleEndDate } from '@/lib/schedule';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
@@ -30,8 +30,7 @@ function standardCc(): string[] {
 
 function formatDateRange(startDate: string): string {
   const start = new Date(startDate);
-  const end = new Date(start);
-  end.setDate(end.getDate() + (CYCLE_LENGTH_DAYS - 1));
+  const end = getCycleEndDate(start);
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
