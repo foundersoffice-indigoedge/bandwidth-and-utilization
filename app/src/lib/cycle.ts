@@ -151,6 +151,10 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       entries
     );
 
+    if (process.env.DISABLE_AIRTABLE_WRITEBACK === 'true') {
+      projectCount++;
+      continue;
+    }
     try {
       await writeBandwidthToAirtable(
         projectRecordId,
