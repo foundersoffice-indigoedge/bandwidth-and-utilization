@@ -31,3 +31,34 @@ export async function postRemark(
 ): Promise<void> {
   await postToSlack(`${fellowName} flagged: ${remark}`);
 }
+
+export async function postNewAdHocProject(
+  projectName: string,
+  projectType: 'mandate' | 'dde' | 'pitch',
+  directorName: string,
+  teammateNames: string[],
+  submitterName: string,
+  cycleStartDate: string,
+  submitterHoursPerWeek: number,
+  submitterUtilizationPct: number,
+  teammateBandwidth: Array<{ name: string; hoursPerWeek: number }>
+): Promise<void> {
+  const typeLabel = projectType === 'mandate' ? 'Mandate' : projectType === 'dde' ? 'DDE' : 'Pitch';
+  const teammateList = teammateNames.length > 0 ? teammateNames.join(', ') : '—';
+  const pctInt = Math.round(submitterUtilizationPct * 100);
+
+  let text = `:new: New ad-hoc project added to bandwidth tracker\n` +
+    `*Name:* ${projectName}\n` +
+    `*Type:* ${typeLabel}\n` +
+    `*Director:* ${directorName}\n` +
+    `*Team:* ${teammateList}\n` +
+    `*Added by:* ${submitterName}\n` +
+    `*Cycle:* Week of ${cycleStartDate}\n` +
+    `Bandwidth given by ${submitterName}: ${submitterHoursPerWeek.toFixed(1)} hrs/week (${pctInt}% of capacity)`;
+
+  for (const tb of teammateBandwidth) {
+    text += `\nBandwidth noted for ${tb.name}: ${tb.hoursPerWeek.toFixed(1)} hrs/week`;
+  }
+
+  await postToSlack(text);
+}

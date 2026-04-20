@@ -1,8 +1,8 @@
 import { db } from '@/lib/db';
-import { tokens } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { tokens, adHocProjects } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
-import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows, isVpOrAvp, fetchDirectors } from '@/lib/airtable/fellows';
 import { notFound, redirect } from 'next/navigation';
 import { SubmissionForm } from './form';
 
@@ -23,9 +23,19 @@ export default async function SubmitPage({
   if (tokenRecord.status === 'submitted') redirect('/submitted');
   if (tokenRecord.status === 'not_needed') redirect('/submitted');
 
-  const [projects, fellows] = await Promise.all([
+  const [projects, fellows, directors, cycleAdHoc] = await Promise.all([
     fetchAllProjects(),
     fetchEligibleFellows(),
+    fetchDirectors(),
+    db
+      .select()
+      .from(adHocProjects)
+      .where(
+        and(
+          eq(adHocProjects.cycleId, tokenRecord.cycleId),
+          eq(adHocProjects.status, 'active'),
+        ),
+      ),
   ]);
 
   const fellowProjects = getProjectsForFellow(projects, tokenRecord.fellowRecordId);
@@ -66,6 +76,42 @@ export default async function SubmitPage({
     };
   });
 
+  const myAdHocProjects = cycleAdHoc
+    .filter(p =>
+      p.createdByFellowId === tokenRecord.fellowRecordId ||
+      (p.teammateRecordIds as string[]).includes(tokenRecord.fellowRecordId)
+    )
+    .map(p => {
+      const otherIds = (p.teammateRecordIds as string[]).filter(id => id !== fellowRecordId);
+      const creatorId = p.createdByFellowId;
+      const teammateIds = creatorId !== fellowRecordId
+        ? [creatorId, ...otherIds.filter(id => id !== creatorId)]
+        : otherIds;
+
+      const associates = isVp
+        ? teammateIds
+            .map(id => fellows.find(f => f.recordId === id))
+            .filter((f): f is NonNullable<typeof f> => f != null)
+            .map(f => ({ recordId: f.recordId, name: f.name }))
+        : [];
+
+      return {
+        projectRecordId: `adhoc_${p.id}`,
+        projectName: p.name,
+        projectType: p.type,
+        stage: 'ad-hoc',
+        associates,
+        isVpRun: false,
+        isAdHoc: true,
+      };
+    });
+
+  const allProjectsForForm = [...projectsWithAssociates, ...myAdHocProjects];
+
+  const fellowOptions = fellows
+    .filter(f => f.recordId !== fellowRecordId)
+    .map(f => ({ recordId: f.recordId, name: f.name, designation: f.designation }));
+
   return (
     <main className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-2">Bandwidth Update</h1>
@@ -76,7 +122,9 @@ export default async function SubmitPage({
         token={tokenValue}
         fellowName={tokenRecord.fellowName}
         isVp={isVp}
-        projects={projectsWithAssociates}
+        projects={allProjectsForForm}
+        directors={directors}
+        fellowOptions={fellowOptions}
       />
     </main>
   );

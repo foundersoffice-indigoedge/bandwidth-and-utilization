@@ -16,6 +16,18 @@ interface Project {
   associates: Associate[];
   isVpRun?: boolean;
   leadFellowName?: string;
+  isAdHoc?: boolean;
+}
+
+interface Director {
+  recordId: string;
+  name: string;
+}
+
+interface FellowOption {
+  recordId: string;
+  name: string;
+  designation: string;
 }
 
 interface HoursEntry {
@@ -36,11 +48,15 @@ export function SubmissionForm({
   fellowName,
   isVp,
   projects,
+  directors,
+  fellowOptions,
 }: {
   token: string;
   fellowName: string;
   isVp: boolean;
   projects: Project[];
+  directors: Director[];
+  fellowOptions: FellowOption[];
 }) {
   const router = useRouter();
   const [entries, setEntries] = useState<Record<string, HoursEntry>>(() => {
@@ -68,6 +84,7 @@ export function SubmissionForm({
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
 
   function update(key: string, field: 'hoursValue' | 'hoursUnit', value: string) {
     setEntries(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
@@ -107,8 +124,10 @@ export function SubmissionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-10">
-      {TYPE_SECTIONS.map(({ type, label, color, border, bg }) => {
-        const group = projects.filter(p => p.projectType === type);
+      {[...TYPE_SECTIONS, { type: 'adhoc', label: 'Added by you / teammates', color: 'text-amber-800', border: 'border-l-amber-600', bg: 'bg-amber-50' }].map(({ type, label, color, border, bg }) => {
+        const group = type === 'adhoc'
+          ? projects.filter(p => p.isAdHoc)
+          : projects.filter(p => p.projectType === type && !p.isAdHoc);
         if (group.length === 0) return null;
         return (
           <section key={type}>
@@ -155,6 +174,30 @@ export function SubmissionForm({
           </section>
         );
       })}
+
+      <div className="border-t pt-4">
+        {showAddForm ? (
+          <AddProjectBlock
+            token={token}
+            isVp={isVp}
+            directors={directors}
+            fellowOptions={fellowOptions}
+            onDone={() => {
+              setShowAddForm(false);
+              router.refresh();
+            }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowAddForm(true)}
+            className="text-sm text-blue-600 hover:text-blue-800 underline"
+          >
+            + Add a project not listed
+          </button>
+        )}
+      </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">Remarks (optional)</label>
@@ -209,6 +252,210 @@ function HoursInput({
         <option value="per_day">hrs/day</option>
         <option value="per_week">hrs/week</option>
       </select>
+    </div>
+  );
+}
+
+function AddProjectBlock({
+  token,
+  isVp,
+  directors,
+  fellowOptions,
+  onDone,
+  onCancel,
+}: {
+  token: string;
+  isVp: boolean;
+  directors: Director[];
+  fellowOptions: FellowOption[];
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [type, setType] = useState<'mandate' | 'dde' | 'pitch'>('mandate');
+  const [name, setName] = useState('');
+  const [directorId, setDirectorId] = useState('');
+  const [teammateIds, setTeammateIds] = useState<string[]>([]);
+  const [selfValue, setSelfValue] = useState('');
+  const [selfUnit, setSelfUnit] = useState<'per_day' | 'per_week'>('per_day');
+  const [teammateBandwidth, setTeammateBandwidth] = useState<Record<string, { value: string; unit: 'per_day' | 'per_week' }>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit() {
+    setErr('');
+    if (!name.trim() || !directorId || !selfValue) {
+      setErr('Fill in project name, director, and your bandwidth.');
+      return;
+    }
+    const director = directors.find(d => d.recordId === directorId);
+    if (!director) {
+      setErr('Invalid director.');
+      return;
+    }
+    setBusy(true);
+    const res = await fetch('/api/add-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        type,
+        name: name.trim(),
+        directorRecordId: director.recordId,
+        directorName: director.name,
+        teammateRecordIds: teammateIds,
+        selfBandwidth: { value: parseFloat(selfValue), unit: selfUnit },
+        teammateBandwidth: isVp
+          ? teammateIds
+              .filter(id => teammateBandwidth[id]?.value)
+              .map(id => ({
+                recordId: id,
+                value: parseFloat(teammateBandwidth[id].value),
+                unit: teammateBandwidth[id].unit,
+              }))
+          : undefined,
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setErr(data.error || 'Failed to add project.');
+      return;
+    }
+    onDone();
+  }
+
+  function toggleTeammate(id: string) {
+    setTeammateIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    if (!teammateBandwidth[id]) {
+      setTeammateBandwidth(prev => ({ ...prev, [id]: { value: '', unit: 'per_day' } }));
+    }
+  }
+
+  return (
+    <div className="border rounded-lg p-4 bg-amber-50 space-y-3">
+      <h3 className="text-sm font-semibold">Add a project not listed</h3>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">Type</label>
+        <div className="flex gap-3 text-sm">
+          {(['mandate', 'dde', 'pitch'] as const).map(t => (
+            <label key={t} className="flex items-center gap-1">
+              <input type="radio" name="type" value={t} checked={type === t} onChange={() => setType(t)} />
+              <span className="capitalize">{t}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">Project name</label>
+        <input
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          className="w-full border rounded px-2 py-1 text-sm"
+          placeholder="e.g. Acme Corp Fundraise"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">Director</label>
+        <select value={directorId} onChange={e => setDirectorId(e.target.value)} className="w-full border rounded px-2 py-1 text-sm">
+          <option value="">Select director...</option>
+          {directors.map(d => (
+            <option key={d.recordId} value={d.recordId}>{d.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">Teammates (optional)</label>
+        <div className="max-h-32 overflow-y-auto border rounded p-2 bg-white space-y-1">
+          {fellowOptions.map(f => (
+            <label key={f.recordId} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={teammateIds.includes(f.recordId)}
+                onChange={() => toggleTeammate(f.recordId)}
+              />
+              <span>{f.name} <span className="text-xs text-gray-500">({f.designation})</span></span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium mb-1">Your bandwidth</label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            step="0.5"
+            min="0"
+            value={selfValue}
+            onChange={e => setSelfValue(e.target.value)}
+            className="border rounded px-2 py-1 w-20 text-sm"
+          />
+          <select
+            value={selfUnit}
+            onChange={e => setSelfUnit(e.target.value as 'per_day' | 'per_week')}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            <option value="per_day">hrs/day</option>
+            <option value="per_week">hrs/week</option>
+          </select>
+        </div>
+      </div>
+
+      {isVp && teammateIds.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium mb-1">Teammate bandwidth (optional)</label>
+          {teammateIds.map(id => {
+            const f = fellowOptions.find(x => x.recordId === id);
+            const tb = teammateBandwidth[id] || { value: '', unit: 'per_day' as const };
+            return (
+              <div key={id} className="flex items-center gap-2 mt-1">
+                <span className="text-xs min-w-[140px]">{f?.name ?? id}</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  value={tb.value}
+                  onChange={e => setTeammateBandwidth(prev => ({ ...prev, [id]: { ...tb, value: e.target.value } }))}
+                  className="border rounded px-2 py-1 w-20 text-sm"
+                />
+                <select
+                  value={tb.unit}
+                  onChange={e => setTeammateBandwidth(prev => ({ ...prev, [id]: { ...tb, unit: e.target.value as 'per_day' | 'per_week' } }))}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="per_day">hrs/day</option>
+                  <option value="per_week">hrs/week</option>
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {err && <p className="text-xs text-red-600">{err}</p>}
+
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={submit}
+          className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+        >
+          {busy ? 'Adding...' : 'Add project'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm bg-gray-200 rounded hover:bg-gray-300"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
