@@ -48,9 +48,46 @@ type LiveFellowResult = LiveFellowData | null;
 export interface LiveCycleData {
   cycleId: string;
   startDate: string;
+  status: 'collecting' | 'complete';
   submittedFellows: LiveFellowData[];
   pendingFellows: { name: string; designation: string }[];
   pendingConflicts: number;
+}
+
+async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
+  const [latest] = await db
+    .select()
+    .from(cycles)
+    .where(eq(cycles.status, 'complete'))
+    .orderBy(desc(cycles.startDate))
+    .limit(1);
+  if (!latest) return null;
+
+  const cycleSnaps = await db
+    .select()
+    .from(snapshots)
+    .where(eq(snapshots.cycleId, latest.id));
+  if (cycleSnaps.length === 0) return null;
+
+  const submittedFellows: LiveFellowData[] = cycleSnaps.map(s => ({
+    fellowRecordId: s.fellowRecordId,
+    fellowName: s.fellowName,
+    designation: s.designation,
+    totalHoursPerWeek: s.totalHoursPerWeek ?? 0,
+    hoursUtilizationPct: s.hoursUtilizationPct ?? s.utilizationPct,
+    loadTag: s.hoursLoadTag ?? s.loadTag,
+    projectBreakdown: s.projectBreakdown,
+    hasConflict: false,
+  }));
+
+  return {
+    cycleId: latest.id,
+    startDate: latest.startDate,
+    status: 'complete',
+    submittedFellows,
+    pendingFellows: [],
+    pendingConflicts: 0,
+  };
 }
 
 async function getLiveCycleData(): Promise<LiveCycleData | null> {
@@ -125,6 +162,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
   return {
     cycleId: activeCycle.id,
     startDate: activeCycle.startDate,
+    status: 'collecting',
     submittedFellows,
     pendingFellows: pendingTokens.map(t => ({ name: t.fellowName, designation: t.fellowDesignation })),
     pendingConflicts: pendingConflicts.length,
@@ -143,13 +181,18 @@ export default async function DashboardPage({
   const iy = iyParam ? parseInt(iyParam) : defaultIy;
   const { start, end } = getIyRange(iy);
 
-  const [allSnapshots, liveCycle] = await Promise.all([
+  const [allSnapshots, activeLiveCycle] = await Promise.all([
     db
       .select()
       .from(snapshots)
       .where(and(gte(snapshots.snapshotDate, start), lte(snapshots.snapshotDate, end))),
     getLiveCycleData(),
   ]);
+
+  const latestCycle: LiveCycleData | null =
+    activeLiveCycle && activeLiveCycle.submittedFellows.length > 0
+      ? activeLiveCycle
+      : await getLatestFinalizedCycleData();
 
   // Serialize for client component
   const snapshotData: SnapshotData[] = allSnapshots.map(s => ({
@@ -168,6 +211,34 @@ export default async function DashboardPage({
     hoursUtilizationPct: s.hoursUtilizationPct,
     hoursLoadTag: s.hoursLoadTag,
   }));
+
+  // Blend active cycle into Monthly view: synthesize a pseudo-snapshot per submitted fellow.
+  // Only blend when the active cycle is within the current IY range.
+  if (
+    activeLiveCycle &&
+    activeLiveCycle.status === 'collecting' &&
+    activeLiveCycle.startDate >= start &&
+    activeLiveCycle.startDate <= end
+  ) {
+    for (const f of activeLiveCycle.submittedFellows) {
+      snapshotData.push({
+        id: `pseudo-${activeLiveCycle.cycleId}-${f.fellowRecordId}`,
+        cycleId: activeLiveCycle.cycleId,
+        fellowRecordId: f.fellowRecordId,
+        fellowName: f.fellowName,
+        designation: f.designation,
+        capacityMeu: 0,
+        totalMeu: 0,
+        utilizationPct: f.hoursUtilizationPct,
+        loadTag: f.loadTag,
+        projectBreakdown: f.projectBreakdown,
+        snapshotDate: activeLiveCycle.startDate,
+        totalHoursPerWeek: f.totalHoursPerWeek,
+        hoursUtilizationPct: f.hoursUtilizationPct,
+        hoursLoadTag: f.loadTag,
+      });
+    }
+  }
 
   // Compute available IYs for the selector
   const availableIys = new Set<number>();
@@ -200,7 +271,7 @@ export default async function DashboardPage({
         </form>
       </div>
 
-      <DashboardView snapshots={snapshotData} iy={iy} liveCycle={liveCycle} />
+      <DashboardView snapshots={snapshotData} iy={iy} liveCycle={latestCycle} />
     </main>
   );
 }

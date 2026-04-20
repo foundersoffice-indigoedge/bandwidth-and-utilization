@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SnapshotData, LiveCycleData, LiveFellowData } from './page';
 import type { ProjectBreakdownItem } from '@/types';
+import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 
 const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
@@ -116,70 +117,119 @@ function findSnapshotForWeek(
 function OverviewGrid({
   fellowIds,
   fellowNames,
+  fellowDesignations,
   fellowMonthSnaps,
   onSelectFellow,
 }: {
   fellowIds: string[];
   fellowNames: Map<string, string>;
+  fellowDesignations: Map<string, string>;
   fellowMonthSnaps: Map<string, Map<number, SnapshotData[]>>;
   onSelectFellow: (id: string) => void;
 }) {
+  const [expanded, setExpanded] = useState<Record<Tier, boolean>>(() => {
+    if (typeof window === 'undefined') return { VP: true, AVP: true, Associate: true, Analyst: true };
+    const raw = localStorage.getItem('utilmis.monthlyTierState');
+    if (!raw) return { VP: true, AVP: true, Associate: true, Analyst: true };
+    try {
+      return { VP: true, AVP: true, Associate: true, Analyst: true, ...JSON.parse(raw) };
+    } catch {
+      return { VP: true, AVP: true, Associate: true, Analyst: true };
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('utilmis.monthlyTierState', JSON.stringify(expanded));
+    }
+  }, [expanded]);
+
+  function toggleTier(t: Tier) {
+    setExpanded(prev => ({ ...prev, [t]: !prev[t] }));
+  }
+
   if (fellowIds.length === 0) {
     return (
       <p className="text-gray-500 text-sm mt-8">No snapshot data for this IY yet.</p>
     );
   }
 
+  const grouped = new Map<Tier, string[]>();
+  for (const fid of fellowIds) {
+    const t = getTier(fellowDesignations.get(fid) || '');
+    const list = grouped.get(t) ?? [];
+    list.push(fid);
+    grouped.set(t, list);
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="bg-gray-50">
-            <th className="border p-2 text-left sticky left-0 bg-gray-50 z-10">Fellow</th>
-            {MONTHS.map(m => (
-              <th key={m} className="border p-2 text-center min-w-[100px]">{m}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {fellowIds.map(fid => {
-            const months = fellowMonthSnaps.get(fid)!;
-            return (
-              <tr key={fid}>
-                <td className="border p-2 font-medium sticky left-0 bg-white z-10">
-                  <button
-                    onClick={() => onSelectFellow(fid)}
-                    className="text-blue-600 hover:underline text-left"
-                  >
-                    {fellowNames.get(fid)}
-                  </button>
-                </td>
-                {MONTHS.map((_, idx) => {
-                  const snaps = months.get(idx);
-                  if (!snaps || snaps.length === 0) {
-                    return <td key={idx} className="border p-2 text-center text-gray-300">—</td>;
-                  }
-                  const n = snaps.length;
-                  const avgUtil = snaps.reduce((s, snap) => s + (snap.hoursUtilizationPct ?? snap.utilizationPct), 0) / n;
-                  const avgHpw = snaps.reduce((s, snap) => s + (snap.totalHoursPerWeek ?? 0), 0) / n;
-                  const tag = getLoadTag(avgUtil);
-                  return (
-                    <td
-                      key={idx}
-                      className={`border p-2 text-center text-xs ${getLoadColor(tag)}`}
-                    >
-                      <div className="font-medium">{Math.round(avgUtil * 100)}%</div>
-                      <div className="text-[10px] opacity-75">
-                        {avgHpw.toFixed(1)} / 84 hrs
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="overflow-x-auto space-y-4">
+      {TIER_ORDER.map(tier => {
+        const list = grouped.get(tier) ?? [];
+        if (list.length === 0) return null;
+        const isOpen = expanded[tier];
+        return (
+          <div key={tier} className="border rounded-lg overflow-hidden">
+            <button
+              className="w-full text-left font-semibold bg-gray-100 hover:bg-gray-200 px-3 py-2 flex items-center gap-2 text-sm"
+              onClick={() => toggleTier(tier)}
+            >
+              <span className="text-gray-500">{isOpen ? '▾' : '▸'}</span>
+              <span>{tier} <span className="text-gray-500 font-normal">({list.length})</span></span>
+            </button>
+            {isOpen && (
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border p-2 text-left sticky left-0 bg-gray-50 z-10">Fellow</th>
+                    {MONTHS.map(m => (
+                      <th key={m} className="border p-2 text-center min-w-[100px]">{m}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map(fid => {
+                    const months = fellowMonthSnaps.get(fid)!;
+                    return (
+                      <tr key={fid}>
+                        <td className="border p-2 font-medium sticky left-0 bg-white z-10">
+                          <button
+                            onClick={() => onSelectFellow(fid)}
+                            className="text-blue-600 hover:underline text-left"
+                          >
+                            {fellowNames.get(fid)}
+                          </button>
+                        </td>
+                        {MONTHS.map((_, idx) => {
+                          const snaps = months.get(idx);
+                          if (!snaps || snaps.length === 0) {
+                            return <td key={idx} className="border p-2 text-center text-gray-300">—</td>;
+                          }
+                          const n = snaps.length;
+                          const avgUtil = snaps.reduce((s, snap) => s + (snap.hoursUtilizationPct ?? snap.utilizationPct), 0) / n;
+                          const avgHpw = snaps.reduce((s, snap) => s + (snap.totalHoursPerWeek ?? 0), 0) / n;
+                          const tag = getLoadTag(avgUtil);
+                          return (
+                            <td
+                              key={idx}
+                              className={`border p-2 text-center text-xs ${getLoadColor(tag)}`}
+                            >
+                              <div className="font-medium">{Math.round(avgUtil * 100)}%</div>
+                              <div className="text-[10px] opacity-75">
+                                {avgHpw.toFixed(1)} / 84 hrs
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -455,10 +505,22 @@ function LiveCycleSection({
   liveCycle: LiveCycleData;
   onSelectFellow: (id: string) => void;
 }) {
-  const [sortMode, setSortMode] = useState<LiveSortMode>('designation');
-  const { submittedFellows, pendingFellows, pendingConflicts, startDate } = liveCycle;
+  const [sortMode, setSortMode] = useState<LiveSortMode>(() => {
+    if (typeof window === 'undefined') return 'designation';
+    const raw = localStorage.getItem('utilmis.liveCycleSort');
+    return raw === 'load' ? 'load' : 'designation';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('utilmis.liveCycleSort', sortMode);
+    }
+  }, [sortMode]);
+
+  const { submittedFellows, pendingFellows, pendingConflicts, startDate, status } = liveCycle;
   const total = submittedFellows.length + pendingFellows.length;
   const dateRange = formatDateRange(startDate);
+  const isCollecting = status === 'collecting';
 
   const sorted = [...submittedFellows].sort((a, b) => {
     if (sortMode === 'load') return b.hoursUtilizationPct - a.hoursUtilizationPct;
@@ -468,9 +530,9 @@ function LiveCycleSection({
   return (
     <div className="mb-8">
       <div className="flex items-center gap-3 mb-3">
-        <h2 className="text-lg font-semibold">Current Cycle</h2>
-        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-          Live
+        <h2 className="text-lg font-semibold">Latest Cycle</h2>
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isCollecting ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+          {isCollecting ? 'Live' : 'Finalized'}
         </span>
         <div className="ml-auto flex items-center gap-1 text-xs text-gray-500">
           Sort:
@@ -489,8 +551,11 @@ function LiveCycleSection({
         </div>
       </div>
       <p className="text-sm text-gray-500 mb-4">
-        {dateRange} · {submittedFellows.length} of {total} submitted
-        {pendingConflicts > 0 && ` · ${pendingConflicts} conflict${pendingConflicts !== 1 ? 's' : ''} pending`}
+        Week of {startDate} · {dateRange} ·{' '}
+        {isCollecting
+          ? `${submittedFellows.length} of ${total} submitted`
+          : `${submittedFellows.length} finalized`}
+        {isCollecting && pendingConflicts > 0 && ` · ${pendingConflicts} conflict${pendingConflicts !== 1 ? 's' : ''} pending`}
       </p>
 
       {sorted.length > 0 && (
@@ -683,18 +748,22 @@ export function DashboardView({
 
   return (
     <>
-      {liveCycle && liveCycle.submittedFellows.length > 0 && (
+      <div className="mb-8">
+        <h2 className="text-lg font-semibold mb-3">Monthly Report</h2>
+        <OverviewGrid
+          fellowIds={fellowIds}
+          fellowNames={fellowNames}
+          fellowDesignations={fellowDesignations}
+          fellowMonthSnaps={fellowMonthSnaps}
+          onSelectFellow={setSelectedFellow}
+        />
+      </div>
+      {liveCycle && (
         <LiveCycleSection
           liveCycle={liveCycle}
           onSelectFellow={(id) => setSelectedLiveFellow(id)}
         />
       )}
-      <OverviewGrid
-        fellowIds={fellowIds}
-        fellowNames={fellowNames}
-        fellowMonthSnaps={fellowMonthSnaps}
-        onSelectFellow={setSelectedFellow}
-      />
     </>
   );
 }
