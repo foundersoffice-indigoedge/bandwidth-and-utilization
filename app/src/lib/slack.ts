@@ -47,9 +47,8 @@ export async function postNewAdHocProject(
   const teammateList = teammateNames.length > 0 ? teammateNames.join(', ') : '—';
   const pctInt = Math.round(submitterUtilizationPct * 100);
 
-  let text = `:new: New ad-hoc project added to bandwidth tracker\n` +
+  let text = `:new: *New Project Flagged - ${typeLabel}*\n` +
     `*Name:* ${projectName}\n` +
-    `*Type:* ${typeLabel}\n` +
     `*Director:* ${directorName}\n` +
     `*Team:* ${teammateList}\n` +
     `*Added by:* ${submitterName}\n` +

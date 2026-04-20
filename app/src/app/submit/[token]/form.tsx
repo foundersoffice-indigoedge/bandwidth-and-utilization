@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 
 interface Associate {
   recordId: string;
@@ -43,6 +44,35 @@ const TYPE_SECTIONS: { type: string; label: string; color: string; border: strin
   { type: 'pitch', label: 'Pitches', color: 'text-violet-800', border: 'border-l-violet-600', bg: 'bg-violet-50' },
 ];
 
+const TYPE_LABELS: Record<'mandate' | 'dde' | 'pitch', string> = {
+  mandate: 'Mandate',
+  dde: 'DDE',
+  pitch: 'Pitch',
+};
+
+function buildInitialEntries(projects: Project[], isVp: boolean): Record<string, HoursEntry> {
+  const init: Record<string, HoursEntry> = {};
+  for (const project of projects) {
+    init[`${project.projectRecordId}:self`] = {
+      projectRecordId: project.projectRecordId,
+      targetFellowId: null,
+      hoursValue: '',
+      hoursUnit: 'per_day',
+    };
+    if (isVp) {
+      for (const assoc of project.associates) {
+        init[`${project.projectRecordId}:${assoc.recordId}`] = {
+          projectRecordId: project.projectRecordId,
+          targetFellowId: assoc.recordId,
+          hoursValue: '',
+          hoursUnit: 'per_day',
+        };
+      }
+    }
+  }
+  return init;
+}
+
 export function SubmissionForm({
   token,
   fellowName,
@@ -59,28 +89,41 @@ export function SubmissionForm({
   fellowOptions: FellowOption[];
 }) {
   const router = useRouter();
-  const [entries, setEntries] = useState<Record<string, HoursEntry>>(() => {
-    const init: Record<string, HoursEntry> = {};
-    for (const project of projects) {
-      init[`${project.projectRecordId}:self`] = {
-        projectRecordId: project.projectRecordId,
-        targetFellowId: null,
-        hoursValue: '',
-        hoursUnit: 'per_day',
-      };
-      if (isVp) {
-        for (const assoc of project.associates) {
-          init[`${project.projectRecordId}:${assoc.recordId}`] = {
+  const [entries, setEntries] = useState<Record<string, HoursEntry>>(() => buildInitialEntries(projects, isVp));
+
+  useEffect(() => {
+    setEntries(prev => {
+      const next = { ...prev };
+      let changed = false;
+      for (const project of projects) {
+        const selfKey = `${project.projectRecordId}:self`;
+        if (!next[selfKey]) {
+          next[selfKey] = {
             projectRecordId: project.projectRecordId,
-            targetFellowId: assoc.recordId,
+            targetFellowId: null,
             hoursValue: '',
             hoursUnit: 'per_day',
           };
+          changed = true;
+        }
+        if (isVp) {
+          for (const assoc of project.associates) {
+            const key = `${project.projectRecordId}:${assoc.recordId}`;
+            if (!next[key]) {
+              next[key] = {
+                projectRecordId: project.projectRecordId,
+                targetFellowId: assoc.recordId,
+                hoursValue: '',
+                hoursUnit: 'per_day',
+              };
+              changed = true;
+            }
+          }
         }
       }
-    }
-    return init;
-  });
+      return changed ? next : prev;
+    });
+  }, [projects, isVp]);
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -341,7 +384,7 @@ function AddProjectBlock({
           {(['mandate', 'dde', 'pitch'] as const).map(t => (
             <label key={t} className="flex items-center gap-1">
               <input type="radio" name="type" value={t} checked={type === t} onChange={() => setType(t)} />
-              <span className="capitalize">{t}</span>
+              <span>{TYPE_LABELS[t]}</span>
             </label>
           ))}
         </div>
@@ -370,18 +413,11 @@ function AddProjectBlock({
 
       <div>
         <label className="block text-xs font-medium mb-1">Teammates (optional)</label>
-        <div className="max-h-32 overflow-y-auto border rounded p-2 bg-white space-y-1">
-          {fellowOptions.map(f => (
-            <label key={f.recordId} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={teammateIds.includes(f.recordId)}
-                onChange={() => toggleTeammate(f.recordId)}
-              />
-              <span>{f.name} <span className="text-xs text-gray-500">({f.designation})</span></span>
-            </label>
-          ))}
-        </div>
+        <TeammateSearchSelect
+          fellowOptions={fellowOptions}
+          selectedIds={teammateIds}
+          onToggle={toggleTeammate}
+        />
       </div>
 
       <div>
@@ -456,6 +492,114 @@ function AddProjectBlock({
           Cancel
         </button>
       </div>
+    </div>
+  );
+}
+
+function TeammateSearchSelect({
+  fellowOptions,
+  selectedIds,
+  onToggle,
+}: {
+  fellowOptions: FellowOption[];
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return;
+      if (!wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const selected = useMemo(
+    () => selectedIds
+      .map(id => fellowOptions.find(f => f.recordId === id))
+      .filter((f): f is FellowOption => Boolean(f)),
+    [selectedIds, fellowOptions],
+  );
+
+  const grouped = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const pool = fellowOptions.filter(f => !selectedIds.includes(f.recordId));
+    const matches = q ? pool.filter(f => f.name.toLowerCase().includes(q)) : pool;
+    const g: Record<Tier, FellowOption[]> = { VP: [], AVP: [], Associate: [], Analyst: [] };
+    for (const f of matches) g[getTier(f.designation)].push(f);
+    for (const t of TIER_ORDER) g[t].sort((a, b) => a.name.localeCompare(b.name));
+    return g;
+  }, [query, fellowOptions, selectedIds]);
+
+  const hasResults = TIER_ORDER.some(t => grouped[t].length > 0);
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-1.5">
+          {selected.map(f => (
+            <span
+              key={f.recordId}
+              className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full"
+            >
+              {f.name}
+              <button
+                type="button"
+                aria-label={`Remove ${f.name}`}
+                onClick={() => onToggle(f.recordId)}
+                className="text-blue-600 hover:text-blue-900 leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <input
+        type="text"
+        value={query}
+        placeholder="Search teammates by name..."
+        onChange={e => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
+        className="w-full border rounded px-2 py-1 text-sm"
+      />
+
+      {open && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-white border rounded shadow-sm text-sm">
+          {!hasResults && (
+            <div className="px-3 py-2 text-xs text-gray-500">No matches.</div>
+          )}
+          {TIER_ORDER.map(tier => {
+            const list = grouped[tier];
+            if (list.length === 0) return null;
+            return (
+              <div key={tier}>
+                <div className="sticky top-0 bg-gray-50 text-[11px] uppercase tracking-wide font-semibold text-gray-500 px-3 py-1 border-b">
+                  {tier}
+                </div>
+                {list.map(f => (
+                  <button
+                    key={f.recordId}
+                    type="button"
+                    onClick={() => {
+                      onToggle(f.recordId);
+                      setQuery('');
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50"
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

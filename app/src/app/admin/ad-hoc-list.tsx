@@ -1,6 +1,12 @@
 'use client';
 import { useState } from 'react';
 
+const TYPE_LABELS: Record<string, string> = {
+  mandate: 'Mandate',
+  dde: 'DDE',
+  pitch: 'Pitch',
+};
+
 interface AdHoc {
   id: string;
   name: string;
@@ -67,7 +73,7 @@ export function AdHocList({ adHocs }: { adHocs: AdHoc[] }) {
           {adHocs.map(a => (
             <tr key={a.id} className="border-t">
               <td className="p-2">{a.name}</td>
-              <td className="p-2 capitalize">{a.type}</td>
+              <td className="p-2">{TYPE_LABELS[a.type] ?? a.type}</td>
               <td className="p-2">{a.directorName}</td>
               <td className="p-2">{a.createdByFellowName}</td>
               <td className="p-2 text-center">{a.submissionCount}</td>
