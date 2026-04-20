@@ -21,6 +21,9 @@ export interface ProjectAssignment {
   stage: string;
   vpAvpIds: string[];
   associateIds: string[];
+  isVpRun?: boolean;
+  leadFellowRecordId?: string;
+  leadFellowName?: string;
 }
 
 export interface SubmissionEntry {
@@ -39,4 +42,6 @@ export interface ProjectBreakdownItem {
   meu: number;
   hoursPerDay: number;
   hoursPerWeek: number;
+  isVpRun?: boolean;
+  leadFellowName?: string;
 }

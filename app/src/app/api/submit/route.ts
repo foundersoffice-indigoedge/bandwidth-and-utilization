@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    if (!isVp && sub.isSelfReport) {
-      // Associate just self-reported. Check if any VP has projected for them on this project.
+    if (sub.isSelfReport) {
+      // Self-report — check if anyone (e.g., VP1 on a VP-run mandate) has projected for this fellow.
       const vpProjections = await db
         .select()
         .from(submissions)

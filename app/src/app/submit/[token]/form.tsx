@@ -14,6 +14,8 @@ interface Project {
   projectType: string;
   stage: string;
   associates: Associate[];
+  isVpRun?: boolean;
+  leadFellowName?: string;
 }
 
 interface HoursEntry {
@@ -118,10 +120,15 @@ export function SubmissionForm({
             <div className="space-y-4">
               {group.map(project => (
                 <div key={project.projectRecordId} className={`border rounded-lg p-4 border-l-4 ${border}`}>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2 mb-3 flex-wrap">
                     <h3 className="text-base font-semibold">{project.projectName}</h3>
                     {project.stage && (
                       <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{project.stage}</span>
+                    )}
+                    {project.isVpRun && (
+                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+                        VP-run{project.leadFellowName ? ` · Led by ${project.leadFellowName}` : ''}
+                      </span>
                     )}
                   </div>
 

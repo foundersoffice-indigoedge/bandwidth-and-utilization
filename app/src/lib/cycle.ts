@@ -187,14 +187,19 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     const hoursUtilPct = calculateHoursUtilization(totalHpw);
     const hoursTag = getLoadTag(hoursUtilPct);
 
-    const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => ({
-      projectName: s.projectName,
-      projectType: s.projectType as ProjectType,
-      score: s.autoScore,
-      meu: s.autoMeu,
-      hoursPerDay: s.hoursPerDay,
-      hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
-    }));
+    const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => {
+      const proj = projectMap.get(s.projectRecordId);
+      return {
+        projectName: s.projectName,
+        projectType: s.projectType as ProjectType,
+        score: s.autoScore,
+        meu: s.autoMeu,
+        hoursPerDay: s.hoursPerDay,
+        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
+        isVpRun: proj?.isVpRun,
+        leadFellowName: proj?.leadFellowName,
+      };
+    });
 
     await db.insert(snapshots).values({
       cycleId,

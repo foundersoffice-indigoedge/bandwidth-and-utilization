@@ -205,7 +205,16 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
             const typeInfo = TYPE_LABELS[b.projectType] || { label: b.projectType, color: '' };
             return (
               <tr key={i} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
-                <td className="p-2">{b.projectName}</td>
+                <td className="p-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span>{b.projectName}</span>
+                    {b.isVpRun && (
+                      <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-medium">
+                        VP-run{b.leadFellowName ? ` · Led by ${b.leadFellowName}` : ''}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className={`p-2 text-center uppercase text-[11px] font-medium ${typeInfo.color}`}>
                   {typeInfo.label}
                 </td>

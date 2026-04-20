@@ -1,5 +1,6 @@
 import { fetchAllRecords } from './client';
 import { TABLE_CONFIG } from './config';
+import { fetchEligibleFellows } from './fellows';
 import type { ProjectType, ProjectAssignment } from '@/types';
 
 export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
@@ -28,6 +29,17 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
             if (ids?.length) associateIds.push(...ids);
           }
 
+          let isVpRun: boolean | undefined;
+          let leadFellowRecordId: string | undefined;
+          if (type === 'mandate' && cfg.isVpRunField) {
+            const raw = r.fields[cfg.isVpRunField];
+            isVpRun = raw === 'Yes';
+            if (isVpRun) {
+              const vp1Ids = (r.fields['Mandate VP / AVP 1'] as string[] | undefined) || [];
+              if (vp1Ids.length > 0) leadFellowRecordId = vp1Ids[0];
+            }
+          }
+
           return {
             projectRecordId: r.id,
             projectName: r.fields[cfg.nameField] as string,
@@ -35,12 +47,27 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
             stage: (r.fields[cfg.stageField] as string) || '',
             vpAvpIds,
             associateIds,
+            isVpRun,
+            leadFellowRecordId,
           };
         });
     })
   );
 
-  return results.flat();
+  const projects = results.flat();
+
+  const needsLeadName = projects.some(p => p.leadFellowRecordId);
+  if (needsLeadName) {
+    const fellows = await fetchEligibleFellows();
+    const nameMap = new Map(fellows.map(f => [f.recordId, f.name]));
+    for (const p of projects) {
+      if (p.leadFellowRecordId) {
+        p.leadFellowName = nameMap.get(p.leadFellowRecordId);
+      }
+    }
+  }
+
+  return projects;
 }
 
 export function getProjectsForFellow(

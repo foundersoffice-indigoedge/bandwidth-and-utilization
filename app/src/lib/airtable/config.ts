@@ -9,6 +9,7 @@ export const TABLE_CONFIG: Record<ProjectType, {
   vpAvpFields: string[];
   associateFields: string[];
   bandwidthField: string;
+  isVpRunField?: string;
   activeStages: string[];
   label: string;
 }> = {
@@ -19,6 +20,7 @@ export const TABLE_CONFIG: Record<ProjectType, {
     vpAvpFields: ['Mandate VP / AVP 1', 'Mandate VP / AVP 2'],
     associateFields: ['Mandate Associate 1', 'Mandate Associate 2'],
     bandwidthField: 'Mandate Bandwidth Situation',
+    isVpRunField: 'Is this a VP run mandate?',
     activeStages: [
       'Not Started',
       'In Production',

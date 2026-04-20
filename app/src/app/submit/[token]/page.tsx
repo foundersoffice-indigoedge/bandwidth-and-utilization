@@ -31,19 +31,38 @@ export default async function SubmitPage({
   const fellowProjects = getProjectsForFellow(projects, tokenRecord.fellowRecordId);
   const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
 
+  const fellowRecordId = tokenRecord.fellowRecordId;
+
   const projectsWithAssociates = fellowProjects.map(project => {
-    const associates = isVp
-      ? project.associateIds
-          .map(id => fellows.find(f => f.recordId === id))
-          .filter((f): f is NonNullable<typeof f> => f != null)
-          .map(f => ({ recordId: f.recordId, name: f.name }))
-      : [];
+    const isVpRunMandate = project.projectType === 'mandate' && project.isVpRun === true;
+    const isLeadVp = isVpRunMandate && project.leadFellowRecordId === fellowRecordId;
+
+    let targetIds: string[] = [];
+    if (isVpRunMandate && !isLeadVp) {
+      // VP2 or associate on a VP-run mandate — self only
+      targetIds = [];
+    } else if (isLeadVp) {
+      // VP1 — project for VP2 + every associate
+      const otherVpIds = project.vpAvpIds.filter(id => id !== fellowRecordId);
+      targetIds = [...otherVpIds, ...project.associateIds];
+    } else if (isVp) {
+      // Non-VP-run: VP/AVP projects for associates (unchanged)
+      targetIds = project.associateIds;
+    }
+
+    const associates = targetIds
+      .map(id => fellows.find(f => f.recordId === id))
+      .filter((f): f is NonNullable<typeof f> => f != null)
+      .map(f => ({ recordId: f.recordId, name: f.name }));
+
     return {
       projectRecordId: project.projectRecordId,
       projectName: project.projectName,
       projectType: project.projectType,
       stage: project.stage,
       associates,
+      isVpRun: project.isVpRun,
+      leadFellowName: project.leadFellowName,
     };
   });
 
