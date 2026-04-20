@@ -8,6 +8,13 @@
       "when": 1775537158804,
       "tag": "0000_special_silk_fever",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776691408564,
+      "tag": "0001_v2_schema",
+      "breakpoints": true
     }
   ]
 }
