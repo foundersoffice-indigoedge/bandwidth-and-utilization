@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import type { SnapshotData, LiveCycleData, LiveFellowData } from './page';
 import type { ProjectBreakdownItem } from '@/types';
 import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
+import { CYCLE_LENGTH_DAYS } from '@/lib/schedule';
 
 const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 
@@ -85,9 +86,10 @@ function getWeekRanges(monthIdx: number, iy: number): { label: string; start: Da
 
 /**
  * Find which snapshot covers a given week.
- * A snapshot's cycle covers snapshotDate to snapshotDate + 13 days.
- * Match if the week and cycle overlap at all (not just midpoint).
- * If multiple cycles overlap, pick the latest one.
+ * Uses +13 day coverage so historical biweekly snapshots still map correctly.
+ * Under weekly cadence this overlaps the next week too, but the latest-wins
+ * tiebreaker plus the strict `weekEnd >= cycleStart` check ensures each week
+ * picks its own Monday's snapshot.
  */
 function findSnapshotForWeek(
   weekStart: Date,
@@ -492,7 +494,7 @@ function DrillDown({
 function formatDateRange(startDate: string): string {
   const start = new Date(startDate);
   const end = new Date(start);
-  end.setDate(end.getDate() + 13);
+  end.setDate(end.getDate() + (CYCLE_LENGTH_DAYS - 1));
   return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
@@ -687,6 +689,23 @@ export function DashboardView({
   const [selectedFellow, setSelectedFellow] = useState<string | null>(null);
   const [selectedLiveFellow, setSelectedLiveFellow] = useState<string | null>(null);
 
+  type DashTab = 'latest' | 'monthly';
+  const [activeTab, setActiveTab] = useState<DashTab>(() => {
+    if (typeof window === 'undefined') return liveCycle ? 'latest' : 'monthly';
+    const saved = localStorage.getItem('utilmis.dashTab');
+    if (saved === 'latest' || saved === 'monthly') {
+      if (saved === 'latest' && !liveCycle) return 'monthly';
+      return saved;
+    }
+    return liveCycle ? 'latest' : 'monthly';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('utilmis.dashTab', activeTab);
+    }
+  }, [activeTab]);
+
   // Build overview data structures
   const fellowMonthSnaps = new Map<string, Map<number, SnapshotData[]>>();
   const fellowNames = new Map<string, string>();
@@ -748,20 +767,45 @@ export function DashboardView({
 
   return (
     <>
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-3">Monthly Report</h2>
+      <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
+        {liveCycle && (
+          <button
+            onClick={() => setActiveTab('latest')}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
+              activeTab === 'latest'
+                ? 'border-blue-600 text-blue-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Latest Cycle
+          </button>
+        )}
+        <button
+          onClick={() => setActiveTab('monthly')}
+          className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
+            activeTab === 'monthly'
+              ? 'border-blue-600 text-blue-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Monthly Report
+        </button>
+      </div>
+
+      {activeTab === 'latest' && liveCycle && (
+        <LiveCycleSection
+          liveCycle={liveCycle}
+          onSelectFellow={(id) => setSelectedLiveFellow(id)}
+        />
+      )}
+
+      {activeTab === 'monthly' && (
         <OverviewGrid
           fellowIds={fellowIds}
           fellowNames={fellowNames}
           fellowDesignations={fellowDesignations}
           fellowMonthSnaps={fellowMonthSnaps}
           onSelectFellow={setSelectedFellow}
-        />
-      </div>
-      {liveCycle && (
-        <LiveCycleSection
-          liveCycle={liveCycle}
-          onSelectFellow={(id) => setSelectedLiveFellow(id)}
         />
       )}
     </>
