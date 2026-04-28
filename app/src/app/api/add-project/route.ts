@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { tokens, submissions, adHocProjects, conflicts, cycles } from '@/lib/db/schema';
+import { tokens, submissions, pendingProjects, conflicts, cycles } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
 import { sendConflictEmail } from '@/lib/email';
-import { postNewAdHocProject } from '@/lib/slack';
+import { postNewProject } from '@/lib/slack';
 import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 
 type ProjectType = 'mandate' | 'dde' | 'pitch';
 
 interface AddProjectPayload {
   token: string;
-  existingAdHocId?: string;
   type: ProjectType;
   name: string;
   directorRecordId: string;
@@ -38,33 +37,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  let adHocId: string;
-  if (payload.existingAdHocId) {
-    adHocId = payload.existingAdHocId;
-  } else {
-    const [created] = await db
-      .insert(adHocProjects)
-      .values({
-        cycleId: tokenRecord.cycleId,
-        type: payload.type,
-        name: payload.name.trim(),
-        directorRecordId: payload.directorRecordId,
-        directorName: payload.directorName,
-        teammateRecordIds: payload.teammateRecordIds,
-        createdByFellowId: tokenRecord.fellowRecordId,
-        createdByFellowName: tokenRecord.fellowName,
-      })
-      .returning();
-    adHocId = created.id;
-  }
+  const [created] = await db
+    .insert(pendingProjects)
+    .values({
+      cycleId: tokenRecord.cycleId,
+      type: payload.type,
+      name: payload.name.trim(),
+      directorRecordId: payload.directorRecordId,
+      directorName: payload.directorName,
+      teammateRecordIds: payload.teammateRecordIds,
+      createdByFellowId: tokenRecord.fellowRecordId,
+      createdByFellowName: tokenRecord.fellowName,
+    })
+    .returning();
+  const pendingId = created.id;
 
-  const projectRecordId = `adhoc_${adHocId}`;
+  const projectRecordId = `pending_${pendingId}`;
 
   const selfHpd = normalizeToHoursPerDay(payload.selfBandwidth.value, payload.selfBandwidth.unit);
   const selfHpw = normalizeToHoursPerWeek(payload.selfBandwidth.value, payload.selfBandwidth.unit);
-  const { score: selfScore, meu: selfMeu } = scoreHours(selfHpd, payload.type);
+  const { score: selfScore } = scoreHours(selfHpd, payload.type);
 
-  const [selfSub] = await db
+  await db
     .insert(submissions)
     .values({
       cycleId: tokenRecord.cycleId,
@@ -77,10 +71,8 @@ export async function POST(req: NextRequest) {
       hoursPerDay: selfHpd,
       hoursPerWeek: selfHpw,
       autoScore: selfScore,
-      autoMeu: selfMeu,
       isSelfReport: true,
-    })
-    .returning();
+    });
 
   const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
   const fellows = await fetchEligibleFellows();
@@ -91,7 +83,7 @@ export async function POST(req: NextRequest) {
     for (const tb of payload.teammateBandwidth) {
       const tbHpd = normalizeToHoursPerDay(tb.value, tb.unit);
       const tbHpw = normalizeToHoursPerWeek(tb.value, tb.unit);
-      const { score: tbScore, meu: tbMeu } = scoreHours(tbHpd, payload.type);
+      const { score: tbScore } = scoreHours(tbHpd, payload.type);
 
       const [projSub] = await db
         .insert(submissions)
@@ -106,7 +98,6 @@ export async function POST(req: NextRequest) {
           hoursPerDay: tbHpd,
           hoursPerWeek: tbHpw,
           autoScore: tbScore,
-          autoMeu: tbMeu,
           isSelfReport: false,
           targetFellowId: tb.recordId,
         })
@@ -142,7 +133,6 @@ export async function POST(req: NextRequest) {
               associateHoursPerDay: existingSelf.hoursPerDay,
               difference: Math.abs(tbHpd - existingSelf.hoursPerDay),
               resolutionToken: resToken,
-              isAdHoc: true,
             })
             .returning();
 
@@ -159,68 +149,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!isVp && payload.existingAdHocId) {
-    const vpProjections = await db
-      .select()
-      .from(submissions)
-      .where(
-        and(
-          eq(submissions.cycleId, tokenRecord.cycleId),
-          eq(submissions.projectRecordId, projectRecordId),
-          eq(submissions.targetFellowId, tokenRecord.fellowRecordId),
-          eq(submissions.isSelfReport, false),
-        ),
-      );
-    for (const vpSub of vpProjections) {
-      if (isConflict(vpSub.hoursPerDay, selfHpd)) {
-        const vpFellow = fellowMap.get(vpSub.fellowRecordId);
-        if (!vpFellow) continue;
-        const resToken = crypto.randomUUID();
-        const [conflictRow] = await db
-          .insert(conflicts)
-          .values({
-            cycleId: tokenRecord.cycleId,
-            projectRecordId,
-            vpSubmissionId: vpSub.id,
-            associateSubmissionId: selfSub.id,
-            vpHoursPerDay: vpSub.hoursPerDay,
-            associateHoursPerDay: selfHpd,
-            difference: Math.abs(vpSub.hoursPerDay - selfHpd),
-            resolutionToken: resToken,
-            isAdHoc: true,
-          })
-          .returning();
+  const teammateNames = payload.teammateRecordIds
+    .map(id => fellowMap.get(id)?.name)
+    .filter((n): n is string => !!n);
+  const [cycleRow] = await db.select().from(cycles).where(eq(cycles.id, tokenRecord.cycleId)).limit(1);
 
-        const emailId = await sendConflictEmail(
-          vpFellow.name, vpFellow.email,
-          tokenRecord.fellowName, tokenRecord.fellowEmail,
-          payload.name.trim(), vpSub.hoursPerDay, selfHpd, resToken,
-        );
-        if (emailId) {
-          await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.id, conflictRow.id));
-        }
-      }
-    }
-  }
+  await postNewProject(
+    payload.name.trim(),
+    payload.type,
+    payload.directorName,
+    teammateNames,
+    tokenRecord.fellowName,
+    cycleRow?.startDate ?? '',
+    selfHpw,
+    selfHpw / 84,
+    teammateBandwidthForSlack,
+  );
 
-  if (!payload.existingAdHocId) {
-    const teammateNames = payload.teammateRecordIds
-      .map(id => fellowMap.get(id)?.name)
-      .filter((n): n is string => !!n);
-    const [cycleRow] = await db.select().from(cycles).where(eq(cycles.id, tokenRecord.cycleId)).limit(1);
-
-    await postNewAdHocProject(
-      payload.name.trim(),
-      payload.type,
-      payload.directorName,
-      teammateNames,
-      tokenRecord.fellowName,
-      cycleRow?.startDate ?? '',
-      selfHpw,
-      selfHpw / 84,
-      teammateBandwidthForSlack,
-    );
-  }
-
-  return NextResponse.json({ ok: true, adHocId });
+  return NextResponse.json({ ok: true, pendingId });
 }
