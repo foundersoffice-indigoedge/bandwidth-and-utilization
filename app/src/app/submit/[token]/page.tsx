@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { tokens, adHocProjects } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { tokens, pendingProjects, submissions } from '@/lib/db/schema';
+import { eq, and, like } from 'drizzle-orm';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { fetchEligibleFellows, isVpOrAvp, fetchDirectors } from '@/lib/airtable/fellows';
 import { notFound, redirect } from 'next/navigation';
@@ -23,17 +23,27 @@ export default async function SubmitPage({
   if (tokenRecord.status === 'submitted') redirect('/submitted');
   if (tokenRecord.status === 'not_needed') redirect('/submitted');
 
-  const [projects, fellows, directors, cycleAdHoc] = await Promise.all([
+  const [projects, fellows, directors, cyclePending, pendingSubs] = await Promise.all([
     fetchAllProjects(),
     fetchEligibleFellows(),
     fetchDirectors(),
     db
       .select()
-      .from(adHocProjects)
+      .from(pendingProjects)
       .where(
         and(
-          eq(adHocProjects.cycleId, tokenRecord.cycleId),
-          eq(adHocProjects.status, 'active'),
+          eq(pendingProjects.cycleId, tokenRecord.cycleId),
+          eq(pendingProjects.status, 'pending'),
+        ),
+      ),
+    db
+      .select()
+      .from(submissions)
+      .where(
+        and(
+          eq(submissions.cycleId, tokenRecord.cycleId),
+          eq(submissions.fellowRecordId, tokenRecord.fellowRecordId),
+          like(submissions.projectRecordId, 'pending_%'),
         ),
       ),
   ]);
@@ -76,7 +86,7 @@ export default async function SubmitPage({
     };
   });
 
-  const myAdHocProjects = cycleAdHoc
+  const myPendingProjects = cyclePending
     .filter(p =>
       p.createdByFellowId === tokenRecord.fellowRecordId ||
       (p.teammateRecordIds as string[]).includes(tokenRecord.fellowRecordId)
@@ -95,18 +105,29 @@ export default async function SubmitPage({
             .map(f => ({ recordId: f.recordId, name: f.name }))
         : [];
 
+      const typeLabel = p.type === 'mandate' ? 'Mandate' : p.type === 'dde' ? 'DDE' : 'Pitch';
       return {
-        projectRecordId: `adhoc_${p.id}`,
+        projectRecordId: `pending_${p.id}`,
         projectName: p.name,
         projectType: p.type,
-        stage: 'ad-hoc',
+        stage: typeLabel,
         associates,
         isVpRun: false,
-        isAdHoc: true,
+        isNew: true,
       };
     });
 
-  const allProjectsForForm = [...projectsWithAssociates, ...myAdHocProjects];
+  const allProjectsForForm = [...projectsWithAssociates, ...myPendingProjects];
+
+  // Pre-fill bandwidth for newly-added projects so values entered at add-time stay visible after re-render.
+  const initialEntries: Record<string, { hoursValue: string; hoursUnit: 'per_day' | 'per_week' }> = {};
+  for (const s of pendingSubs) {
+    const suffix = s.targetFellowId ?? 'self';
+    initialEntries[`${s.projectRecordId}:${suffix}`] = {
+      hoursValue: String(s.hoursValue),
+      hoursUnit: s.hoursUnit,
+    };
+  }
 
   const fellowOptions = fellows
     .filter(f => f.recordId !== fellowRecordId)
@@ -125,6 +146,7 @@ export default async function SubmitPage({
         projects={allProjectsForForm}
         directors={directors}
         fellowOptions={fellowOptions}
+        initialEntries={initialEntries}
       />
     </main>
   );
