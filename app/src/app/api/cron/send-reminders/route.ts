@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   for (const t of pendingTokens) {
     await sendReminderEmail(
-      { recordId: t.fellowRecordId, name: t.fellowName, email: t.fellowEmail, designation: t.fellowDesignation, capacityMeu: 0 },
+      { recordId: t.fellowRecordId, name: t.fellowName, email: t.fellowEmail, designation: t.fellowDesignation },
       t.token,
       cycle.startDate
     );
