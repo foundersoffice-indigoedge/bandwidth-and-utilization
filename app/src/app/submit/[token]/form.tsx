@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
+import { deriveEntries, type HoursEntry } from './form-entries';
 
 interface Associate {
   recordId: string;
@@ -17,7 +18,7 @@ interface Project {
   associates: Associate[];
   isVpRun?: boolean;
   leadFellowName?: string;
-  isAdHoc?: boolean;
+  isNew?: boolean;
 }
 
 interface Director {
@@ -29,13 +30,6 @@ interface FellowOption {
   recordId: string;
   name: string;
   designation: string;
-}
-
-interface HoursEntry {
-  projectRecordId: string;
-  targetFellowId: string | null;
-  hoursValue: string;
-  hoursUnit: 'per_day' | 'per_week';
 }
 
 const TYPE_SECTIONS: { type: string; label: string; color: string; border: string; bg: string }[] = [
@@ -50,29 +44,6 @@ const TYPE_LABELS: Record<'mandate' | 'dde' | 'pitch', string> = {
   pitch: 'Pitch',
 };
 
-function buildInitialEntries(projects: Project[], isVp: boolean): Record<string, HoursEntry> {
-  const init: Record<string, HoursEntry> = {};
-  for (const project of projects) {
-    init[`${project.projectRecordId}:self`] = {
-      projectRecordId: project.projectRecordId,
-      targetFellowId: null,
-      hoursValue: '',
-      hoursUnit: 'per_day',
-    };
-    if (isVp) {
-      for (const assoc of project.associates) {
-        init[`${project.projectRecordId}:${assoc.recordId}`] = {
-          projectRecordId: project.projectRecordId,
-          targetFellowId: assoc.recordId,
-          hoursValue: '',
-          hoursUnit: 'per_day',
-        };
-      }
-    }
-  }
-  return init;
-}
-
 export function SubmissionForm({
   token,
   fellowName,
@@ -80,6 +51,7 @@ export function SubmissionForm({
   projects,
   directors,
   fellowOptions,
+  initialEntries = {},
 }: {
   token: string;
   fellowName: string;
@@ -87,50 +59,24 @@ export function SubmissionForm({
   projects: Project[];
   directors: Director[];
   fellowOptions: FellowOption[];
+  initialEntries?: Record<string, { hoursValue: string; hoursUnit: 'per_day' | 'per_week' }>;
 }) {
   const router = useRouter();
-  const [entries, setEntries] = useState<Record<string, HoursEntry>>(() => buildInitialEntries(projects, isVp));
-
-  useEffect(() => {
-    setEntries(prev => {
-      const next = { ...prev };
-      let changed = false;
-      for (const project of projects) {
-        const selfKey = `${project.projectRecordId}:self`;
-        if (!next[selfKey]) {
-          next[selfKey] = {
-            projectRecordId: project.projectRecordId,
-            targetFellowId: null,
-            hoursValue: '',
-            hoursUnit: 'per_day',
-          };
-          changed = true;
-        }
-        if (isVp) {
-          for (const assoc of project.associates) {
-            const key = `${project.projectRecordId}:${assoc.recordId}`;
-            if (!next[key]) {
-              next[key] = {
-                projectRecordId: project.projectRecordId,
-                targetFellowId: assoc.recordId,
-                hoursValue: '',
-                hoursUnit: 'per_day',
-              };
-              changed = true;
-            }
-          }
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [projects, isVp]);
+  const [userInput, setUserInput] = useState<Record<string, HoursEntry>>({});
+  const entries = useMemo(
+    () => deriveEntries(projects, isVp, userInput, initialEntries),
+    [projects, isVp, userInput, initialEntries],
+  );
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
 
   function update(key: string, field: 'hoursValue' | 'hoursUnit', value: string) {
-    setEntries(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
+    setUserInput(prev => ({
+      ...prev,
+      [key]: { ...(prev[key] ?? entries[key]), [field]: value },
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -167,10 +113,10 @@ export function SubmissionForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-10">
-      {[...TYPE_SECTIONS, { type: 'adhoc', label: 'Added by you / teammates', color: 'text-amber-800', border: 'border-l-amber-600', bg: 'bg-amber-50' }].map(({ type, label, color, border, bg }) => {
-        const group = type === 'adhoc'
-          ? projects.filter(p => p.isAdHoc)
-          : projects.filter(p => p.projectType === type && !p.isAdHoc);
+      {[...TYPE_SECTIONS, { type: 'new', label: 'New projects', color: 'text-amber-800', border: 'border-l-amber-600', bg: 'bg-amber-50' }].map(({ type, label, color, border, bg }) => {
+        const group = type === 'new'
+          ? projects.filter(p => p.isNew)
+          : projects.filter(p => p.projectType === type && !p.isNew);
         if (group.length === 0) return null;
         return (
           <section key={type}>
@@ -247,7 +193,7 @@ export function SubmissionForm({
         <textarea
           className="w-full border rounded-lg p-2 text-sm"
           rows={3}
-          placeholder="Flag projects not in the system, other work, or concerns..."
+          placeholder="any sector scoping, outreach or other threads you are working on"
           value={remarks}
           onChange={e => setRemarks(e.target.value)}
         />
@@ -335,6 +281,16 @@ function AddProjectBlock({
       setErr('Invalid director.');
       return;
     }
+    if (isVp && teammateIds.length > 0) {
+      const missing = teammateIds.filter(id => {
+        const v = teammateBandwidth[id]?.value;
+        return !v || v.trim() === '';
+      });
+      if (missing.length > 0) {
+        setErr('Enter bandwidth for every teammate you added.');
+        return;
+      }
+    }
     setBusy(true);
     const res = await fetch('/api/add-project', {
       method: 'POST',
@@ -348,13 +304,11 @@ function AddProjectBlock({
         teammateRecordIds: teammateIds,
         selfBandwidth: { value: parseFloat(selfValue), unit: selfUnit },
         teammateBandwidth: isVp
-          ? teammateIds
-              .filter(id => teammateBandwidth[id]?.value)
-              .map(id => ({
-                recordId: id,
-                value: parseFloat(teammateBandwidth[id].value),
-                unit: teammateBandwidth[id].unit,
-              }))
+          ? teammateIds.map(id => ({
+              recordId: id,
+              value: parseFloat(teammateBandwidth[id].value),
+              unit: teammateBandwidth[id].unit,
+            }))
           : undefined,
       }),
     });
@@ -444,7 +398,7 @@ function AddProjectBlock({
 
       {isVp && teammateIds.length > 0 && (
         <div>
-          <label className="block text-xs font-medium mb-1">Teammate bandwidth (optional)</label>
+          <label className="block text-xs font-medium mb-1">Teammate bandwidth</label>
           {teammateIds.map(id => {
             const f = fellowOptions.find(x => x.recordId === id);
             const tb = teammateBandwidth[id] || { value: '', unit: 'per_day' as const };
