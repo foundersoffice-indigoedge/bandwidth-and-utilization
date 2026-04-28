@@ -15,6 +15,20 @@
       "when": 1776691408564,
       "tag": "0001_v2_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776755576278,
+      "tag": "0002_drop_meu",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1745798400000,
+      "tag": "0003_pending_projects_rename",
+      "breakpoints": true
     }
   ]
 }
