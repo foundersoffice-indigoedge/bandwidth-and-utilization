@@ -31,7 +31,6 @@ export const submissions = pgTable('submissions', {
   hoursUnit: text('hours_unit', { enum: ['per_day', 'per_week'] }).notNull(),
   hoursPerDay: real('hours_per_day').notNull(),
   autoScore: integer('auto_score').notNull(),
-  autoMeu: real('auto_meu').notNull(),
   isSelfReport: boolean('is_self_report').notNull(),
   targetFellowId: text('target_fellow_id'),
   remarks: text('remarks'),
@@ -53,7 +52,6 @@ export const conflicts = pgTable('conflicts', {
   resolutionToken: text('resolution_token'),
   emailMessageId: text('email_message_id'),
   lastReminderSentAt: timestamp('last_reminder_sent_at'),
-  isAdHoc: boolean('is_ad_hoc').notNull().default(false),
 });
 
 export const snapshots = pgTable('snapshots', {
@@ -62,10 +60,6 @@ export const snapshots = pgTable('snapshots', {
   fellowRecordId: text('fellow_record_id').notNull(),
   fellowName: text('fellow_name').notNull(),
   designation: text('designation').notNull(),
-  capacityMeu: real('capacity_meu').notNull(),
-  totalMeu: real('total_meu').notNull(),
-  utilizationPct: real('utilization_pct').notNull(),
-  loadTag: text('load_tag').notNull(),
   projectBreakdown: jsonb('project_breakdown').$type<ProjectBreakdownItem[]>().notNull(),
   snapshotDate: date('snapshot_date').notNull(),
   totalHoursPerWeek: real('total_hours_per_week'),
@@ -73,7 +67,7 @@ export const snapshots = pgTable('snapshots', {
   hoursLoadTag: text('hours_load_tag'),
 });
 
-export const adHocProjects = pgTable('ad_hoc_projects', {
+export const pendingProjects = pgTable('pending_projects', {
   id: uuid('id').defaultRandom().primaryKey(),
   cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),
   type: text('type', { enum: ['mandate', 'dde', 'pitch'] }).notNull(),
@@ -84,9 +78,7 @@ export const adHocProjects = pgTable('ad_hoc_projects', {
   createdByFellowId: text('created_by_fellow_id').notNull(),
   createdByFellowName: text('created_by_fellow_name').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  status: text('status', { enum: ['active', 'linked', 'superseded'] }).notNull().default('active'),
-  linkedAirtableRecordId: text('linked_airtable_record_id'),
-  linkedAt: timestamp('linked_at'),
+  status: text('status', { enum: ['pending', 'finished'] }).notNull().default('pending'),
 });
 
 export const conflictRemindersSent = pgTable('conflict_reminders_sent', {
