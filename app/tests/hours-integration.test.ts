@@ -1,11 +1,10 @@
 /**
  * Integration tests for the hours-per-week utilization method.
  * Tests the full data flow: submission → scoring → finalization → snapshot → dashboard display.
- * These validate that nothing broke during the MEU→hours switchover.
  */
 import { describe, it, expect } from 'vitest';
 import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours, WORKING_DAYS_PER_WEEK } from '../src/lib/scoring';
-import { calculateHoursUtilization, calculateUtilization, getLoadTag, sumMeu, WEEKLY_CAPACITY_HOURS } from '../src/lib/utilization';
+import { calculateHoursUtilization, getLoadTag, WEEKLY_CAPACITY_HOURS } from '../src/lib/utilization';
 import type { ProjectBreakdownItem, HoursUnit } from '../src/types';
 
 // --- Simulate the full submission pipeline ---
@@ -14,18 +13,12 @@ import type { ProjectBreakdownItem, HoursUnit } from '../src/types';
 function simulateSubmission(hoursValue: number, hoursUnit: HoursUnit, projectType: 'mandate' | 'dde' | 'pitch') {
   const hoursPerDay = normalizeToHoursPerDay(hoursValue, hoursUnit);
   const hoursPerWeek = normalizeToHoursPerWeek(hoursValue, hoursUnit);
-  const { score, meu } = scoreHours(hoursPerDay, projectType);
-  return { hoursPerDay, hoursPerWeek, score, meu };
+  const { score } = scoreHours(hoursPerDay, projectType);
+  return { hoursPerDay, hoursPerWeek, score };
 }
 
 /** Mirrors what cycle.ts does for snapshot creation */
-function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPerWeek: number | null; score: number; meu: number; projectName: string; projectType: 'mandate' | 'dde' | 'pitch' }>, capacityMeu: number) {
-  // MEU-based (old method, still computed for rollback)
-  const totalMeu = sumMeu(submissions.map(s => s.meu));
-  const meuUtilPct = calculateUtilization(totalMeu, capacityMeu);
-  const meuLoadTag = getLoadTag(meuUtilPct);
-
-  // Hours-based (new method)
+function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPerWeek: number | null; score: number; projectName: string; projectType: 'mandate' | 'dde' | 'pitch' }>) {
   const totalHpw = submissions.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
   const hoursUtilPct = calculateHoursUtilization(totalHpw);
   const hoursLoadTag = getLoadTag(hoursUtilPct);
@@ -34,12 +27,11 @@ function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPer
     projectName: s.projectName,
     projectType: s.projectType,
     score: s.score,
-    meu: s.meu,
     hoursPerDay: s.hoursPerDay,
     hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
   }));
 
-  return { totalMeu, meuUtilPct, meuLoadTag, totalHpw, hoursUtilPct, hoursLoadTag, breakdown };
+  return { totalHpw, hoursUtilPct, hoursLoadTag, breakdown };
 }
 
 describe('Submission pipeline: hours conversion', () => {
@@ -67,95 +59,59 @@ describe('Submission pipeline: hours conversion', () => {
     expect(result.hoursPerWeek).toBe(9);
   });
 
-  it('still computes MEU scores alongside hours (for rollback data)', () => {
+  it('computes score alongside hours', () => {
     const result = simulateSubmission(4, 'per_day', 'mandate');
     expect(result.score).toBe(3);
-    expect(result.meu).toBe(1.00);
-    // Hours are independent of MEU
     expect(result.hoursPerWeek).toBe(24);
   });
 });
 
 describe('Conflict resolution: hoursPerWeek update', () => {
   it('resolvedHours * WORKING_DAYS_PER_WEEK matches normalizeToHoursPerWeek for per_day', () => {
-    // Resolve route uses resolvedHours * WORKING_DAYS_PER_WEEK
-    // Submit route uses normalizeToHoursPerWeek(value, 'per_day')
-    // These must be equivalent
     const resolvedHours = 3.5;
     const fromResolve = resolvedHours * WORKING_DAYS_PER_WEEK;
     const fromNormalize = normalizeToHoursPerWeek(resolvedHours, 'per_day');
     expect(fromResolve).toBe(fromNormalize);
   });
 
-  it('re-scoring with resolved hours produces consistent MEU + hours', () => {
-    const resolvedHours = 5; // hrs/day
-    const { score, meu } = scoreHours(resolvedHours, 'mandate');
+  it('re-scoring with resolved hours produces consistent score + hours', () => {
+    const resolvedHours = 5;
+    const { score } = scoreHours(resolvedHours, 'mandate');
     const hoursPerWeek = resolvedHours * WORKING_DAYS_PER_WEEK;
     expect(score).toBe(3);
-    expect(meu).toBe(1.00);
     expect(hoursPerWeek).toBe(30);
   });
 });
 
-describe('Finalization: snapshot creation with both methods', () => {
+describe('Finalization: snapshot creation', () => {
   const submissions = [
-    { hoursPerDay: 4, hoursPerWeek: 20 as number | null, score: 3, meu: 1.00, projectName: 'Mandate A', projectType: 'mandate' as const },
-    { hoursPerDay: 1, hoursPerWeek: 5 as number | null, score: 3, meu: 0.30, projectName: 'DDE B', projectType: 'dde' as const },
-    { hoursPerDay: 0.5, hoursPerWeek: 2.5 as number | null, score: 2, meu: 0.20, projectName: 'Pitch C', projectType: 'pitch' as const },
+    { hoursPerDay: 4, hoursPerWeek: 20 as number | null, score: 3, projectName: 'Mandate A', projectType: 'mandate' as const },
+    { hoursPerDay: 1, hoursPerWeek: 5 as number | null, score: 3, projectName: 'DDE B', projectType: 'dde' as const },
+    { hoursPerDay: 0.5, hoursPerWeek: 2.5 as number | null, score: 2, projectName: 'Pitch C', projectType: 'pitch' as const },
   ];
 
   it('computes totalHoursPerWeek as sum of all project hours', () => {
-    const result = simulateFinalization(submissions, 3.0);
-    expect(result.totalHpw).toBe(27.5); // 20 + 5 + 2.5
+    const result = simulateFinalization(submissions);
+    expect(result.totalHpw).toBe(27.5);
   });
 
   it('computes hours utilization as totalHpw / 84', () => {
-    const result = simulateFinalization(submissions, 3.0);
+    const result = simulateFinalization(submissions);
     expect(result.hoursUtilPct).toBeCloseTo(27.5 / 84, 4);
     expect(result.hoursUtilPct).toBeCloseTo(0.3274, 3);
   });
 
   it('assigns correct load tag for hours utilization', () => {
-    const result = simulateFinalization(submissions, 3.0);
-    // 32.7% → Comfortable (0.30 to < 0.60)
+    const result = simulateFinalization(submissions);
     expect(result.hoursLoadTag).toBe('Comfortable');
-  });
-
-  it('still computes MEU-based utilization for rollback', () => {
-    const result = simulateFinalization(submissions, 3.0);
-    expect(result.totalMeu).toBeCloseTo(1.50); // 1.00 + 0.30 + 0.20
-    expect(result.meuUtilPct).toBeCloseTo(0.50); // 1.50 / 3.0
-    expect(result.meuLoadTag).toBe('Comfortable');
-  });
-
-  it('MEU and hours methods can give different results', () => {
-    // A fellow doing lots of light DDE/pitch work:
-    // High hours but low MEU (because DDE/pitch MEU is small per hour)
-    const lightWork = [
-      { hoursPerDay: 2, hoursPerWeek: 10 as number | null, score: 4, meu: 0.40, projectName: 'DDE 1', projectType: 'dde' as const },
-      { hoursPerDay: 2, hoursPerWeek: 10 as number | null, score: 4, meu: 0.40, projectName: 'DDE 2', projectType: 'dde' as const },
-      { hoursPerDay: 2, hoursPerWeek: 10 as number | null, score: 4, meu: 0.40, projectName: 'Pitch 1', projectType: 'pitch' as const },
-      { hoursPerDay: 2, hoursPerWeek: 10 as number | null, score: 4, meu: 0.40, projectName: 'Pitch 2', projectType: 'pitch' as const },
-      { hoursPerDay: 2, hoursPerWeek: 10 as number | null, score: 4, meu: 0.40, projectName: 'Pitch 3', projectType: 'pitch' as const },
-    ];
-    const result = simulateFinalization(lightWork, 3.0);
-    // Hours: 50/84 = 59.5% → Comfortable
-    expect(result.hoursUtilPct).toBeCloseTo(50 / 84, 3);
-    expect(result.hoursLoadTag).toBe('Comfortable');
-    // MEU: 2.0/3.0 = 66.7% → Busy
-    expect(result.meuUtilPct).toBeCloseTo(2.0 / 3.0, 3);
-    expect(result.meuLoadTag).toBe('Busy');
-    // They differ! This is expected and is why we're switching methods.
   });
 
   it('handles null hoursPerWeek with fallback to hoursPerDay * 6', () => {
-    // Simulates submissions from before the hoursPerWeek column existed
     const oldSubmissions = [
-      { hoursPerDay: 4, hoursPerWeek: null, score: 3, meu: 1.00, projectName: 'Old Mandate', projectType: 'mandate' as const },
-      { hoursPerDay: 1, hoursPerWeek: null, score: 3, meu: 0.30, projectName: 'Old DDE', projectType: 'dde' as const },
+      { hoursPerDay: 4, hoursPerWeek: null, score: 3, projectName: 'Old Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 1, hoursPerWeek: null, score: 3, projectName: 'Old DDE', projectType: 'dde' as const },
     ];
-    const result = simulateFinalization(oldSubmissions, 3.0);
-    // Fallback: 4*6 + 1*6 = 30
+    const result = simulateFinalization(oldSubmissions);
     expect(result.totalHpw).toBe(30);
     expect(result.hoursUtilPct).toBeCloseTo(30 / 84, 4);
   });
@@ -164,49 +120,18 @@ describe('Finalization: snapshot creation with both methods', () => {
 describe('ProjectBreakdownItem: hoursPerWeek field', () => {
   it('includes hoursPerWeek in breakdown from new submissions', () => {
     const submissions = [
-      { hoursPerDay: 6, hoursPerWeek: 30 as number | null, score: 4, meu: 1.25, projectName: 'Big Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 6, hoursPerWeek: 30 as number | null, score: 4, projectName: 'Big Mandate', projectType: 'mandate' as const },
     ];
-    const result = simulateFinalization(submissions, 3.0);
+    const result = simulateFinalization(submissions);
     expect(result.breakdown[0].hoursPerWeek).toBe(30);
   });
 
   it('computes hoursPerWeek from fallback for old submissions', () => {
     const submissions = [
-      { hoursPerDay: 6, hoursPerWeek: null, score: 4, meu: 1.25, projectName: 'Old Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 6, hoursPerWeek: null, score: 4, projectName: 'Old Mandate', projectType: 'mandate' as const },
     ];
-    const result = simulateFinalization(submissions, 3.0);
-    expect(result.breakdown[0].hoursPerWeek).toBe(36); // 6 * 6
-  });
-});
-
-describe('Dashboard display logic', () => {
-  it('nullish coalescing does NOT skip zero values', () => {
-    // Critical: a fellow with 0 hours should show 0%, not fall back to MEU
-    const hoursUtilizationPct: number | null = 0;
-    const utilizationPct = 0.5; // old MEU value
-    const displayed = hoursUtilizationPct ?? utilizationPct;
-    expect(displayed).toBe(0); // Must be 0, not 0.5
-  });
-
-  it('nullish coalescing falls back for null values', () => {
-    const hoursUtilizationPct: number | null = null;
-    const utilizationPct = 0.5;
-    const displayed = hoursUtilizationPct ?? utilizationPct;
-    expect(displayed).toBe(0.5); // Falls back to MEU
-  });
-
-  it('overview grid averaging works with hours fields', () => {
-    // Simulate 2 snapshots in a month
-    const snaps = [
-      { hoursUtilizationPct: 0.30, utilizationPct: 0.50, totalHoursPerWeek: 25.2 },
-      { hoursUtilizationPct: 0.40, utilizationPct: 0.60, totalHoursPerWeek: 33.6 },
-    ];
-    const n = snaps.length;
-    const avgUtil = snaps.reduce((s, snap) => s + (snap.hoursUtilizationPct ?? snap.utilizationPct), 0) / n;
-    const avgHpw = snaps.reduce((s, snap) => s + (snap.totalHoursPerWeek ?? 0), 0) / n;
-    expect(avgUtil).toBeCloseTo(0.35);
-    expect(avgHpw).toBeCloseTo(29.4);
-    expect(getLoadTag(avgUtil)).toBe('Comfortable');
+    const result = simulateFinalization(submissions);
+    expect(result.breakdown[0].hoursPerWeek).toBe(36);
   });
 });
 
@@ -234,10 +159,13 @@ describe('Edge cases: extreme values', () => {
 
   it('large per_week value (40 hrs/week) passes through correctly', () => {
     const result = simulateSubmission(40, 'per_week', 'mandate');
-    expect(result.hoursPerDay).toBeCloseTo(40 / 6); // ~6.667 hrs/day
+    expect(result.hoursPerDay).toBeCloseTo(40 / 6);
     expect(result.hoursPerWeek).toBe(40);
-    expect(result.score).toBe(4); // 6.667 < 8 → score 4
-    expect(result.meu).toBe(1.25);
+    expect(result.score).toBe(4);
+  });
+
+  it('capacity constant is 84', () => {
+    expect(WEEKLY_CAPACITY_HOURS).toBe(84);
   });
 });
 

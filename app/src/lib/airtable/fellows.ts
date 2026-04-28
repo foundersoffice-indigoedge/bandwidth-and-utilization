@@ -16,7 +16,6 @@ export async function fetchEligibleFellows(): Promise<Fellow[]> {
       name: r.fields['Name of Fellow'] as string,
       email: r.fields['Email ID of Fellow'] as string,
       designation: r.fields['Designation of Fellow'] as string,
-      capacityMeu: Number(r.fields['Capacity [MEU]']) || 3.0,
     }));
 }
 

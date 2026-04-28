@@ -1,37 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumMeu, calculateUtilization, getLoadTag, calculateHoursUtilization, WEEKLY_CAPACITY_HOURS } from '../src/lib/utilization';
-
-describe('sumMeu', () => {
-  it('sums an array of MEU values', () => {
-    expect(sumMeu([1.00, 0.75, 0.30])).toBeCloseTo(2.05);
-  });
-
-  it('returns 0 for empty array', () => {
-    expect(sumMeu([])).toBe(0);
-  });
-
-  it('handles single value', () => {
-    expect(sumMeu([1.50])).toBe(1.50);
-  });
-});
-
-describe('calculateUtilization', () => {
-  it('calculates totalMeu / capacityMeu', () => {
-    expect(calculateUtilization(2.25, 3.0)).toBeCloseTo(0.75);
-  });
-
-  it('returns 0 when capacity is 0', () => {
-    expect(calculateUtilization(1.0, 0)).toBe(0);
-  });
-
-  it('can exceed 1.0 for overloaded fellows', () => {
-    expect(calculateUtilization(4.0, 3.0)).toBeCloseTo(1.333, 2);
-  });
-
-  it('returns 0 when totalMeu is 0', () => {
-    expect(calculateUtilization(0, 3.0)).toBe(0);
-  });
-});
+import { getLoadTag, calculateHoursUtilization, WEEKLY_CAPACITY_HOURS } from '../src/lib/utilization';
 
 describe('calculateHoursUtilization', () => {
   it('returns totalHoursPerWeek / 84', () => {

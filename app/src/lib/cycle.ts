@@ -5,7 +5,7 @@ import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { generateNarrative, writeBandwidthToAirtable } from '@/lib/airtable/writeback';
-import { sumMeu, calculateUtilization, getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
+import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
 export { isCycleMonday } from '@/lib/schedule';
@@ -177,12 +177,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     );
     if (fellowSubs.length === 0) continue;
 
-    const meuValues = fellowSubs.map(s => s.autoMeu);
-    const totalMeu = sumMeu(meuValues);
-    const utilPct = calculateUtilization(totalMeu, fellow.capacityMeu);
-    const loadTag = getLoadTag(utilPct);
-
-    // Hours-based utilization (new method)
     const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
     const hoursUtilPct = calculateHoursUtilization(totalHpw);
     const hoursTag = getLoadTag(hoursUtilPct);
@@ -193,7 +187,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
         projectName: s.projectName,
         projectType: s.projectType as ProjectType,
         score: s.autoScore,
-        meu: s.autoMeu,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         isVpRun: proj?.isVpRun,
@@ -206,10 +199,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       fellowRecordId: fellow.recordId,
       fellowName: fellow.name,
       designation: fellow.designation,
-      capacityMeu: fellow.capacityMeu,
-      totalMeu,
-      utilizationPct: utilPct,
-      loadTag,
       projectBreakdown: breakdown,
       snapshotDate: dateStr,
       totalHoursPerWeek: totalHpw,

@@ -34,77 +34,77 @@ describe('normalizeToHoursPerWeek', () => {
 });
 
 describe('scoreHours — mandates', () => {
-  it('scores 0 hrs/day as 1, MEU 0.25', () => {
-    expect(scoreHours(0, 'mandate')).toEqual({ score: 1, meu: 0.25 });
+  it('scores 0 hrs/day as 1', () => {
+    expect(scoreHours(0, 'mandate')).toEqual({ score: 1 });
   });
 
   it('scores 1.49 hrs/day as 1', () => {
-    expect(scoreHours(1.49, 'mandate')).toEqual({ score: 1, meu: 0.25 });
+    expect(scoreHours(1.49, 'mandate')).toEqual({ score: 1 });
   });
 
   it('scores exactly 1.5 hrs/day as 2 (boundary goes up)', () => {
-    expect(scoreHours(1.5, 'mandate')).toEqual({ score: 2, meu: 0.75 });
+    expect(scoreHours(1.5, 'mandate')).toEqual({ score: 2 });
   });
 
   it('scores 2 hrs/day as 2', () => {
-    expect(scoreHours(2, 'mandate')).toEqual({ score: 2, meu: 0.75 });
+    expect(scoreHours(2, 'mandate')).toEqual({ score: 2 });
   });
 
   it('scores exactly 3 hrs/day as 3', () => {
-    expect(scoreHours(3, 'mandate')).toEqual({ score: 3, meu: 1.00 });
+    expect(scoreHours(3, 'mandate')).toEqual({ score: 3 });
   });
 
   it('scores 5 hrs/day as 3', () => {
-    expect(scoreHours(5, 'mandate')).toEqual({ score: 3, meu: 1.00 });
+    expect(scoreHours(5, 'mandate')).toEqual({ score: 3 });
   });
 
   it('scores exactly 6 hrs/day as 4', () => {
-    expect(scoreHours(6, 'mandate')).toEqual({ score: 4, meu: 1.25 });
+    expect(scoreHours(6, 'mandate')).toEqual({ score: 4 });
   });
 
   it('scores 7.5 hrs/day as 4', () => {
-    expect(scoreHours(7.5, 'mandate')).toEqual({ score: 4, meu: 1.25 });
+    expect(scoreHours(7.5, 'mandate')).toEqual({ score: 4 });
   });
 
   it('scores exactly 8 hrs/day as 5', () => {
-    expect(scoreHours(8, 'mandate')).toEqual({ score: 5, meu: 1.50 });
+    expect(scoreHours(8, 'mandate')).toEqual({ score: 5 });
   });
 
   it('scores 10 hrs/day as 5', () => {
-    expect(scoreHours(10, 'mandate')).toEqual({ score: 5, meu: 1.50 });
+    expect(scoreHours(10, 'mandate')).toEqual({ score: 5 });
   });
 });
 
 describe('scoreHours — dde/pitch (1/3 intensity)', () => {
-  it('scores 0 hrs/day as 1, MEU 0.10', () => {
-    expect(scoreHours(0, 'dde')).toEqual({ score: 1, meu: 0.10 });
+  it('scores 0 hrs/day as 1', () => {
+    expect(scoreHours(0, 'dde')).toEqual({ score: 1 });
   });
 
   it('scores 0.49 hrs/day as 1', () => {
-    expect(scoreHours(0.49, 'dde')).toEqual({ score: 1, meu: 0.10 });
+    expect(scoreHours(0.49, 'dde')).toEqual({ score: 1 });
   });
 
   it('scores exactly 0.5 hrs/day as 2', () => {
-    expect(scoreHours(0.5, 'dde')).toEqual({ score: 2, meu: 0.20 });
+    expect(scoreHours(0.5, 'dde')).toEqual({ score: 2 });
   });
 
   it('scores exactly 1 hr/day as 3', () => {
-    expect(scoreHours(1, 'pitch')).toEqual({ score: 3, meu: 0.30 });
+    expect(scoreHours(1, 'pitch')).toEqual({ score: 3 });
   });
 
   it('scores 1.5 hrs/day as 3', () => {
-    expect(scoreHours(1.5, 'dde')).toEqual({ score: 3, meu: 0.30 });
+    expect(scoreHours(1.5, 'dde')).toEqual({ score: 3 });
   });
 
   it('scores exactly 2 hrs/day as 4', () => {
-    expect(scoreHours(2, 'dde')).toEqual({ score: 4, meu: 0.40 });
+    expect(scoreHours(2, 'dde')).toEqual({ score: 4 });
   });
 
   it('scores exactly 3 hrs/day as 5', () => {
-    expect(scoreHours(3, 'pitch')).toEqual({ score: 5, meu: 0.50 });
+    expect(scoreHours(3, 'pitch')).toEqual({ score: 5 });
   });
 
   it('scores 5 hrs/day as 5', () => {
-    expect(scoreHours(5, 'pitch')).toEqual({ score: 5, meu: 0.50 });
+    expect(scoreHours(5, 'pitch')).toEqual({ score: 5 });
   });
 });

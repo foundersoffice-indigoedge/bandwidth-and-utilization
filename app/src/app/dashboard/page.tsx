@@ -21,10 +21,6 @@ export interface SnapshotData {
   fellowRecordId: string;
   fellowName: string;
   designation: string;
-  capacityMeu: number;
-  totalMeu: number;
-  utilizationPct: number;
-  loadTag: string;
   projectBreakdown: ProjectBreakdownItem[];
   snapshotDate: string;
   totalHoursPerWeek: number | null;
@@ -41,6 +37,7 @@ export interface LiveFellowData {
   loadTag: string;
   projectBreakdown: ProjectBreakdownItem[];
   hasConflict: boolean;
+  remarks: string | null;
 }
 
 type LiveFellowResult = LiveFellowData | null;
@@ -63,21 +60,31 @@ async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
     .limit(1);
   if (!latest) return null;
 
-  const cycleSnaps = await db
-    .select()
-    .from(snapshots)
-    .where(eq(snapshots.cycleId, latest.id));
+  const [cycleSnaps, cycleSubs] = await Promise.all([
+    db.select().from(snapshots).where(eq(snapshots.cycleId, latest.id)),
+    db.select().from(submissions).where(
+      and(eq(submissions.cycleId, latest.id), eq(submissions.isSelfReport, true))
+    ),
+  ]);
   if (cycleSnaps.length === 0) return null;
+
+  const remarksByFellow = new Map<string, string>();
+  for (const sub of cycleSubs) {
+    if (remarksByFellow.has(sub.fellowRecordId)) continue;
+    const trimmed = sub.remarks?.trim();
+    if (trimmed) remarksByFellow.set(sub.fellowRecordId, trimmed);
+  }
 
   const submittedFellows: LiveFellowData[] = cycleSnaps.map(s => ({
     fellowRecordId: s.fellowRecordId,
     fellowName: s.fellowName,
     designation: s.designation,
     totalHoursPerWeek: s.totalHoursPerWeek ?? 0,
-    hoursUtilizationPct: s.hoursUtilizationPct ?? s.utilizationPct,
-    loadTag: s.hoursLoadTag ?? s.loadTag,
+    hoursUtilizationPct: s.hoursUtilizationPct ?? 0,
+    loadTag: s.hoursLoadTag ?? 'Free',
     projectBreakdown: s.projectBreakdown,
     hasConflict: false,
+    remarks: remarksByFellow.get(s.fellowRecordId) ?? null,
   }));
 
   return {
@@ -142,11 +149,12 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         projectName: s.projectName,
         projectType: s.projectType as ProjectType,
         score: s.autoScore,
-        meu: s.autoMeu,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         hasConflict: conflictProjectIds.has(s.projectRecordId),
       }));
+
+      const remarks = fellowSubs.find(s => s.remarks && s.remarks.trim().length > 0)?.remarks?.trim() ?? null;
 
       return {
         fellowRecordId: t.fellowRecordId,
@@ -157,6 +165,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         loadTag: tag,
         projectBreakdown: breakdown,
         hasConflict,
+        remarks,
       };
     })
     .filter((f): f is LiveFellowData => f !== null);
@@ -203,10 +212,6 @@ export default async function DashboardPage({
     fellowRecordId: s.fellowRecordId,
     fellowName: s.fellowName,
     designation: s.designation,
-    capacityMeu: s.capacityMeu,
-    totalMeu: s.totalMeu,
-    utilizationPct: s.utilizationPct,
-    loadTag: s.loadTag,
     projectBreakdown: s.projectBreakdown,
     snapshotDate: s.snapshotDate,
     totalHoursPerWeek: s.totalHoursPerWeek,
@@ -229,10 +234,6 @@ export default async function DashboardPage({
         fellowRecordId: f.fellowRecordId,
         fellowName: f.fellowName,
         designation: f.designation,
-        capacityMeu: 0,
-        totalMeu: 0,
-        utilizationPct: f.hoursUtilizationPct,
-        loadTag: f.loadTag,
         projectBreakdown: f.projectBreakdown,
         snapshotDate: activeLiveCycle.startDate,
         totalHoursPerWeek: f.totalHoursPerWeek,

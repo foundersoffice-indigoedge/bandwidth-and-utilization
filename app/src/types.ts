@@ -11,7 +11,6 @@ export interface Fellow {
   name: string;
   email: string;
   designation: string;
-  capacityMeu: number;
 }
 
 export interface ProjectAssignment {
@@ -39,7 +38,6 @@ export interface ProjectBreakdownItem {
   projectName: string;
   projectType: ProjectType;
   score: number;
-  meu: number;
   hoursPerDay: number;
   hoursPerWeek: number;
   isVpRun?: boolean;
