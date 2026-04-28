@@ -32,7 +32,7 @@ export async function postRemark(
   await postToSlack(`${fellowName} flagged: ${remark}`);
 }
 
-export async function postNewAdHocProject(
+export async function postNewProject(
   projectName: string,
   projectType: 'mandate' | 'dde' | 'pitch',
   directorName: string,
@@ -47,7 +47,7 @@ export async function postNewAdHocProject(
   const teammateList = teammateNames.length > 0 ? teammateNames.join(', ') : '—';
   const pctInt = Math.round(submitterUtilizationPct * 100);
 
-  let text = `:new: *New Project Flagged - ${typeLabel}*\n` +
+  let text = `:new: *New ${typeLabel}*\n` +
     `*Name:* ${projectName}\n` +
     `*Director:* ${directorName}\n` +
     `*Team:* ${teammateList}\n` +
