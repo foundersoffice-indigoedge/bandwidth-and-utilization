@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { tokens, submissions, conflicts } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { tokens, submissions, conflicts, pendingProjects } from '@/lib/db/schema';
+import { eq, and, isNull } from 'drizzle-orm';
 import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
 import { sendConflictEmail } from '@/lib/email';
@@ -44,13 +44,73 @@ export async function POST(req: NextRequest) {
   const remarksText = remarks?.trim() || null;
 
   for (const entry of entries) {
-    const project = projectMap.get(entry.projectRecordId);
-    if (!project) continue;
+    const isPending = entry.projectRecordId.startsWith('pending_');
+
+    let projectName: string;
+    let projectType: 'mandate' | 'dde' | 'pitch';
+
+    if (isPending) {
+      const pendingId = entry.projectRecordId.replace(/^pending_/, '');
+      const [pending] = await db
+        .select()
+        .from(pendingProjects)
+        .where(
+          and(
+            eq(pendingProjects.id, pendingId),
+            eq(pendingProjects.cycleId, tokenRecord.cycleId),
+          ),
+        )
+        .limit(1);
+      if (!pending) continue;
+      projectName = pending.name;
+      projectType = pending.type;
+    } else {
+      const project = projectMap.get(entry.projectRecordId);
+      if (!project) continue;
+      projectName = project.projectName;
+      projectType = project.projectType;
+    }
 
     const hoursPerDay = normalizeToHoursPerDay(entry.hoursValue, entry.hoursUnit);
     const hoursPerWeek = normalizeToHoursPerWeek(entry.hoursValue, entry.hoursUnit);
-    const { score, meu } = scoreHours(hoursPerDay, project.projectType);
+    const { score } = scoreHours(hoursPerDay, projectType);
     const isSelfReport = entry.targetFellowId === null;
+
+    if (isPending) {
+      // Submissions for newly-added projects are created at add-time by /api/add-project; on final submit,
+      // update the existing row with any edits the user made. Skip conflict re-detection
+      // since conflicts were already created at add-time (and the conflicts table has no
+      // unique constraint — re-running would duplicate).
+      const [existing] = await db
+        .select()
+        .from(submissions)
+        .where(
+          and(
+            eq(submissions.cycleId, tokenRecord.cycleId),
+            eq(submissions.fellowRecordId, tokenRecord.fellowRecordId),
+            eq(submissions.projectRecordId, entry.projectRecordId),
+            isSelfReport
+              ? isNull(submissions.targetFellowId)
+              : eq(submissions.targetFellowId, entry.targetFellowId!),
+          ),
+        )
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(submissions)
+          .set({
+            hoursValue: entry.hoursValue,
+            hoursUnit: entry.hoursUnit,
+            hoursPerDay,
+            hoursPerWeek,
+            autoScore: score,
+            remarks: isSelfReport ? remarksText : existing.remarks,
+          })
+          .where(eq(submissions.id, existing.id));
+      }
+      continue;
+    }
 
     const [saved] = await db
       .insert(submissions)
@@ -58,14 +118,13 @@ export async function POST(req: NextRequest) {
         cycleId: tokenRecord.cycleId,
         fellowRecordId: tokenRecord.fellowRecordId,
         projectRecordId: entry.projectRecordId,
-        projectName: project.projectName,
-        projectType: project.projectType,
+        projectName,
+        projectType,
         hoursValue: entry.hoursValue,
         hoursUnit: entry.hoursUnit,
         hoursPerDay,
         hoursPerWeek,
         autoScore: score,
-        autoMeu: meu,
         isSelfReport,
         targetFellowId: entry.targetFellowId,
         remarks: isSelfReport ? remarksText : null,
