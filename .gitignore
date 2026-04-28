@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Local tool caches
+.superpowers/
+
+# Vercel local cache
+.vercel
+
+# Local env files
+.env
+.env.*
+!.env.example
