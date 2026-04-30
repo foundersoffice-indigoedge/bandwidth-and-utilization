@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-04-28 (pending_projects rename + admin link workflow removed + git/vercel state reconciled)
+> **Last updated:** 2026-04-30 (Airtable bandwidth writeback removed permanently — dashboard is the SoT)
 
 ## Instructions for Claude
 
@@ -18,7 +18,7 @@
 
 ## Current Focus
 
-**v2 shipped + post-launch fixes landed.** Weekly cadence, VP-run mandates, conflict reminders, dashboard restructure all live. Transitional-cycle date math, per-project conflict badge, and form/UX refinements shipped April 20. Crash fix + UX polish landed April 21. Fellow x Project tab (per-person per-project utilization-over-time chart) shipped April 21, followed by MEU cleanup (dropped dual scoring model; hours ÷ 84 is the sole signal now). Airtable writeback still paused. First clean weekly cycle auto-started Mon Apr 27. April 28: "ad hoc projects" renamed to "pending projects" across schema/code/UI/tests, admin link-to-Airtable workflow stripped, table reframed as a one-way outbox for an external automation. Same day: previously-uncommitted local UI work (MEU removal, Fellow x Project tab, April 27 dashboard fixes) was committed to git so future `git push` deploys match working state.
+**v2 shipped + post-launch fixes landed.** Weekly cadence, VP-run mandates, conflict reminders, dashboard restructure all live. Transitional-cycle date math, per-project conflict badge, and form/UX refinements shipped April 20. Crash fix + UX polish landed April 21. Fellow x Project tab (per-person per-project utilization-over-time chart) shipped April 21, followed by MEU cleanup (dropped dual scoring model; hours ÷ 84 is the sole signal now). First clean weekly cycle auto-started Mon Apr 27. April 28: "ad hoc projects" renamed to "pending projects" across schema/code/UI/tests, admin link-to-Airtable workflow stripped, table reframed as a one-way outbox for an external automation. Same day: previously-uncommitted local UI work (MEU removal, Fellow x Project tab, April 27 dashboard fixes) was committed to git so future `git push` deploys match working state. April 30: Airtable bandwidth writeback removed entirely — dashboard is now the single source of truth for bandwidth, Airtable is read-only from the app's side.
 
 ---
 
@@ -26,7 +26,7 @@
 
 | Workstream | Status | Owner | Notes |
 |------------|--------|-------|-------|
-| Application code | **Done** | Ajder | 26 commits on `main` in `app/`, 119 tests passing |
+| Application code | **Done** | Ajder | 27 commits on `main` in `app/`, 117 tests passing (writeback module + tests removed Apr 30) |
 | Infrastructure provisioning | **Done** | Ajder | Neon Postgres, Resend, Slack webhook, all env vars set |
 | Git remote setup | **Done** | Ajder | `foundersoffice-indigoedge/bandwidth-and-utilization` |
 | Deploy | **Done** | Ajder | Live at `bandwidth-and-utilization.vercel.app`, crons registered |
@@ -35,7 +35,7 @@
 | Post-test improvements | **Done** | Ajder | Active stage filtering, grouped project display, email CC/enrichment, dark mode fix, dashboard unification |
 | Hours-per-week migration | **Done** | Ajder | Switched from MEU scoring to hrs/week ÷ 84 capacity. Old code retained for rollback. |
 | First live cycle | **In Progress** | Ajder | Triggered April 17, 2026. 24/33 submitted, 9 pending. |
-| v2 updates | **Done** | Ajder | Weekly cadence, auto-finalize, writeback pause, conflict reminders, VP-run mandates, ad-hoc projects, dashboard restructure. 11 commits, 92 tests passing. |
+| v2 updates | **Done** | Ajder | Weekly cadence, auto-finalize, writeback pause (later removed entirely on Apr 30), conflict reminders, VP-run mandates, ad-hoc projects, dashboard restructure. 11 commits, 92 tests passing at v2 cut. |
 
 ---
 
@@ -80,6 +80,7 @@
 | 2026-04-27 | Two dashboard fixes shipped. (1) Monthly Report tab couldn't horizontal-scroll past Jan because each tier card had `overflow-hidden` clipping the table; refactored each tier to wrap its `<table>` in an `overflow-x-auto` div with `min-w-full`, so months Feb–Jun become reachable while the Fellow column stays sticky-pinned on the left. (2) Latest Cycle drill-down now surfaces fellow-submitted remarks ("flags") in an amber callout below the project table. Plumbed `remarks` through `LiveFellowData`, populated from any non-null self-report row in `getLiveCycleData` (active cycle) and via a parallel `submissions` query in `getLatestFinalizedCycleData` (finalized fallback — snapshots don't carry remarks, no schema change needed). 119/119 tests still passing, TypeScript clean. Deployed direct to prod mid-cycle (read-only dashboard change, no risk to live cycle data). |
 | 2026-04-28 | Pending-projects rename + admin link workflow strip. Killed "ad hoc" terminology across schema, code, UI, tests, Slack messages. Reframed `pending_projects` (was `ad_hoc_projects`) as a one-way outbox: rows land with `status='pending'`, an external automation (separate workstream) will create the corresponding Airtable record, set status to `'finished'`, and delete the row. Status enum collapsed `active\|linked\|superseded` → `pending\|finished`. Dropped `linked_airtable_record_id`, `linked_at`, and `conflicts.is_ad_hoc`. Project record id prefix migrated `adhoc_*` → `pending_*` in `submissions` (9 rows) and `conflicts` (0 rows) via UPDATE in the migration. UI: form section "Added by you / teammates" → "New projects"; remarks placeholder reframed for sector scoping, outreach, and other non-project threads (projects already have a structured path). Stripped admin link/connect workflow entirely (`admin/ad-hoc-list.tsx` + `/api/ad-hoc-projects/suggest` + `/api/ad-hoc-projects/link` deleted). Slack notification title simplified to `:new: *New Mandate*` / DDE / Pitch. Killed dead `existingAdHocId` reconnect branch in `/api/add-project`. 10 commits via subagent-driven plan execution, 119/119 tests passing, `tsc --noEmit` clean. Migration `0003_pending_projects_rename` applied directly to prod Neon (no drizzle migrations table — same pattern as 0002_drop_meu). Plan: `docs/superpowers/plans/2026-04-28-pending-projects-rename.md`. |
 | 2026-04-28 | Reconciled git ↔ Vercel state drift. Past `vercel --prod` deploys had been uploading the working tree and quietly carrying ~10 modified files + 4 untracked files (MEU removal April 21, Fellow x Project tab April 21, dashboard fixes April 27) that never made it into git. The pending_projects push exposed this when the git-based build broke on a half-finished MEU type. Recovery: redeployed via `vercel --prod` to restore prod with full UI work, then committed the local-only changes in 3 grouped commits (MEU + Fellow x Project + April 27 dashboard fixes bundled), tracked project docs (CLAUDE.md, MEMORY.md, PROGRESS TRACKER.md, problem-statement.md, design specs, plans, Context Files), added root `.gitignore` for `.DS_Store`/`.superpowers`/`.vercel`/env files, and added `seed-test-data.mjs` as a real tracked tool. Going forward, `git push origin main` and `vercel --prod` from local will produce the same code. 4 ad-hoc `.mjs` debug scripts left untracked deliberately (`check-db`, `cleanup-preview`, `preview-bandwidth-form`, `verify-adhoc-rendering`) — one-off utilities, decide later. |
+| 2026-04-30 | Airtable bandwidth writeback removed entirely. The new utilization dashboard is now the single source of truth for bandwidth — there's no longer a need to push narrative summaries back to the Mandate / DDE / Pitch "Bandwidth Situation" fields on cycle close. Cleanup spans 6 files (148 deletions, 1 insertion): deleted `writeback.ts` module + its test, removed `updateRecord` helper from `airtable/client.ts` (only consumer was writeback), dropped `bandwidthField` from `TABLE_CONFIG`, ripped the project-grouping + narrative-write block out of `finalizeCycle` along with the `DISABLE_AIRTABLE_WRITEBACK` env-flag branch, and stripped `projectCount` + `failures` from the `sendCompletionEmail` signature (per-fellow `FellowSummary.projectCount` for the email table preserved). `DISABLE_AIRTABLE_WRITEBACK` removed from Vercel Production scope and from local `.env.production.local`. Airtable reads (fellows, projects) untouched — the app is now read-only against Airtable. Verified: 9/9 test files green (117/117), `next build` clean, prod deploy `dpl_6QAeQe3eSmm…` live at the production alias, dashboard renders 91KB with fellow data, cron auth gates return 401, fellow-project API rejects missing params with 400, no `writeback`/`DISABLE_AIRTABLE`/`bandwidthField` references remain anywhere in the repo. Commit `eeaad06`. |
 
 ---
 
@@ -88,8 +89,8 @@
 - ~~Live end-to-end test passes~~ (done)
 - ~~First live collection cycle triggered~~ (done, April 17, 2026)
 - ~~v2 post-rollout updates deployed~~ (done, April 20, 2026)
-- **First weekly cycle under new cadence** — Mon April 27, 2026 (auto-triggered)
-- **Resume Airtable writeback** — once data accuracy holds across 2-3 cycles
+- ~~First weekly cycle under new cadence~~ (done, auto-triggered Mon April 27, 2026)
+- ~~Resume Airtable writeback~~ (superseded — writeback removed entirely on April 30, 2026; dashboard is the SoT)
 
 ## Manual Steps Checklist (Pre-Deploy)
 

@@ -1,7 +1,7 @@
 # Utilization MIS — Memory
 
 > Institutional memory of this project. Captures what we know, what we decided, and why.
-> **Last updated:** 2026-04-28 (pending_projects rename + admin link workflow removed + git/vercel state reconciled)
+> **Last updated:** 2026-04-30 (Airtable bandwidth writeback removed permanently — dashboard is the SoT)
 
 ## Instructions for Claude
 
@@ -37,7 +37,8 @@
 | 2026-04-17 | **Switch to hours-per-week utilization method** — flat 84 hrs/week capacity for all fellows, utilization = total projected hrs/week ÷ 84. Old MEU scoring code retained in codebase for rollback. | MEU scoring table added complexity without proportional value. Hours-per-week is simpler, more intuitive for leadership, and maps directly to what fellows report. 84 hrs/week (12 hrs/day × 7 days) represents total available capacity. Rollback to MEU requires only switching which columns the dashboard and email read from. |
 | 2026-04-20 | **Weekly cadence (was biweekly)** — anchored Mon 2026-04-27, reference-date check compares current Monday to anchor, any whole-week multiple matches | Biweekly felt too infrequent given how fast project loads shift at IE. Weekly lines up with how directors already think about allocation. Reference-date approach avoids DB state. |
 | 2026-04-20 | **Auto-finalize stale cycles on new cycle start, VP-as-truth for dangling conflicts** | If a cycle is still in `collecting` when the next one starts, it gets auto-finalized and any unresolved conflict defaults to the VP's number. Prevents stuck cycles from blocking the next one; VP's view is the closer-to-reality default when an associate never responded. |
-| 2026-04-20 | **Pause Airtable writeback via `DISABLE_AIRTABLE_WRITEBACK=true`** | Wanted to observe data accuracy across several cycles before writing back to Airtable, which is the org's source of truth for mandate staffing. Single env flag toggles it — no code changes needed to resume. Re-enable once 2-3 cycles show clean data. |
+| 2026-04-20 | **Pause Airtable writeback via `DISABLE_AIRTABLE_WRITEBACK=true`** (superseded 2026-04-30) | Wanted to observe data accuracy across several cycles before writing back to Airtable. Single env flag toggled it. Superseded by the 2026-04-30 decision to remove writeback entirely once it became clear the dashboard could carry the bandwidth-of-truth role on its own. |
+| 2026-04-30 | **Airtable bandwidth writeback removed entirely; the utilization dashboard is the single source of truth for bandwidth** | The dashboard's monthly view, latest-cycle drill-down, and Fellow x Project tab cover every consumption need that the Airtable narrative was originally meant to satisfy — and they do it with structured data instead of a free-text blob that drifted out of date the moment a cycle finalized. Keeping the writeback alive just to populate fields nobody read added ongoing maintenance + a confusing two-source mental model (which is truth — dashboard or Airtable narrative?). Cleanup deleted the writeback module, `updateRecord` helper, `bandwidthField` config, the writeback block in `finalizeCycle`, and the `DISABLE_AIRTABLE_WRITEBACK` env flag (Vercel + local). Airtable reads (fellows, projects) are untouched — the app is now read-only against Airtable. The Mandate / DDE / Pitch "Bandwidth Situation" fields will sit frozen with their last narrative until someone clears them manually; that's accepted as deliberate fallout. |
 | 2026-04-20 | **Daily conflict reminder cron, threaded via `In-Reply-To`** | Unresolved conflicts were lingering too long. Daily nudge at 4:30 AM, replies into the original conflict thread so Gmail collapses them (no separate thread noise). Tracked via `conflict_reminders_sent` table; reminder rows never dedupe but the thread does. |
 | 2026-04-20 | **VP-run mandates: VP records teammate projections, no conflict triggered when teammate doesn't self-report** | Some mandates are VP-led with the teammate as shadow support. Forcing the teammate to self-report every cycle created false conflicts. VP's projection stands until the teammate chooses to override by submitting themselves. |
 | 2026-04-20 | **Ad-hoc projects: dedicated table + dice-coefficient suggestions for linking** | Fellows often work on projects not yet in Airtable (new wins not created, QDEs in flight). Form now has an Add-Project block that creates rows in `ad_hoc_projects`. Admin can link to canonical Airtable records via similarity-ranked suggestions (top-5 by dice coefficient bigram overlap). Admin keeps final judgment. |
@@ -90,9 +91,8 @@
 - IY (IndigoEdge fiscal year) convention: July–June. `iyOf(dateStr)` returns `year + 1` for Jul–Dec dates, `year` for Jan–Jun. IY2026 = July 2025 through June 2026. The dashboard's existing `getIyRange(iy)` uses the same convention — both should stay in sync if the fiscal calendar changes.
 
 ### Testing
-- Full self-test validated the complete workflow (cycle start through dashboard rendering). Airtable writeback format differs from historical manual entries (plain text vs. markdown headers), making test data easy to identify but also means the system's output will eventually replace manual data.
+- Full self-test validated the complete workflow (cycle start through dashboard rendering). Note (historical): the original April writeback narrative format differed from manual entries; that path was retired on 2026-04-30 along with the writeback feature.
 - `TEST_EMAIL_OVERRIDE` pattern works well for safe production testing. Set the env var, run the test, remove the var. No code changes needed.
-- Cycle finalization writes bandwidth to ALL projects a fellow has self-reports for (not just ones the VP reported on). When testing with a fellow who has many mandates, expect many Airtable records to be updated. Clean them all up.
 - Seed script (`app/seed-test-data.mjs`) uses `rec_test_` prefixed fellow IDs for safe cleanup. `node seed-test-data.mjs --clean` deletes all test data via `DELETE WHERE fellow_record_id LIKE 'rec_test_%'`. Script is idempotent (cleans before re-seeding).
 
 ### Email Delivery
@@ -114,8 +114,13 @@
 
 ### Feature Flags & Rollout
 
-- `DISABLE_AIRTABLE_WRITEBACK=true` in prod pauses all writeback to Airtable. Code still computes what it would write. Re-enable by setting the var to anything else (or removing it). Pattern: single env flag checked at the writeback callsite, no code branches needed elsewhere.
 - Weekly vs biweekly cadence is a single-constant change (`CYCLE_ANCHOR` + `WEEKS_PER_CYCLE` in `schedule.ts`). Reference-date schedule math absorbs the switch — no data migration needed when changing cadence.
+- `DISABLE_AIRTABLE_WRITEBACK` was a single-env-flag pause for the writeback feature (2026-04-20). Removed entirely on 2026-04-30 along with the feature. Lesson worth keeping: a single boolean env var checked at the one mutating callsite is enough to gate a whole feature path — far less code churn than threading a flag through types or branches. When the gated feature was eventually killed, the cleanup was 6 files because the flag had stayed cleanly localized.
+
+### Source-of-truth boundaries
+
+- **Airtable is read-only from the app's perspective** (post 2026-04-30). The app reads fellows, projects, stages, and team assignments from Airtable, but never writes back. The dashboard owns bandwidth-of-truth in Postgres (snapshots + submissions). When deciding where a new piece of data belongs: project staffing / metadata → Airtable; per-cycle bandwidth, utilization, conflicts, narratives → app DB.
+- **Removing one-way writebacks simplifies the mental model dramatically.** Two-way sync between Airtable and the app DB was always a question of "which one is truth right now?" — solved at the cost of ongoing maintenance and the pause/resume gymnastics of April. Kill the writeback, pick the dashboard as truth, accept that Airtable's bandwidth fields are frozen historical text. Net code: 148 lines deleted, zero added. Future features that feel like they want a write back to Airtable should justify why the dashboard isn't the right home first.
 
 ---
 
