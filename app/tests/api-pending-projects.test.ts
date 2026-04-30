@@ -2,11 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSelect = vi.fn();
 const mockUpdate = vi.fn();
+const mockUpdateReturning = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
     select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: mockSelect, limit: mockSelect }) }), where: () => ({ orderBy: mockSelect, limit: mockSelect }) }) }),
-    update: () => ({ set: () => ({ where: mockUpdate }) }),
+    update: () => ({
+      set: () => ({
+        where: (...args: unknown[]) => {
+          // The where() result must be both: (a) directly awaitable for routes
+          // that use `await db.update(...).set(...).where(...)` and (b) chainable
+          // with `.returning(...)` for routes that need the affected rows.
+          const awaitable = mockUpdate(...args);
+          const builder = Promise.resolve(awaitable);
+          (builder as unknown as { returning: typeof mockUpdateReturning }).returning =
+            mockUpdateReturning;
+          return builder;
+        },
+      }),
+    }),
   },
 }));
 
@@ -22,6 +36,7 @@ beforeEach(() => {
   process.env.BT_INTEGRATION_SECRET = SECRET;
   mockSelect.mockReset();
   mockUpdate.mockReset();
+  mockUpdateReturning.mockReset();
 });
 
 const auth = { headers: { authorization: `Bearer ${SECRET}` } };
@@ -164,6 +179,8 @@ describe('POST confirming', () => {
   });
 
   it('returns 404 when row missing', async () => {
+    // Atomic UPDATE matches 0 rows, fallback SELECT also empty
+    mockUpdateReturning.mockResolvedValueOnce([]);
     mockSelect.mockResolvedValueOnce([]);
     const res = await postConfirming(
       new Request('http://x', { method: 'POST', headers: auth.headers }),
@@ -172,8 +189,9 @@ describe('POST confirming', () => {
     expect(res.status).toBe(404);
   });
 
-  it('transitions pending -> confirming', async () => {
-    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'pending' }]);
+  it('atomically claims a pending row', async () => {
+    // Atomic UPDATE matches 1 row → claimed
+    mockUpdateReturning.mockResolvedValueOnce([{ id: 'u1' }]);
     const res = await postConfirming(
       new Request('http://x', { method: 'POST', headers: auth.headers }),
       { params }
@@ -181,16 +199,19 @@ describe('POST confirming', () => {
     expect(res.status).toBe(200);
   });
 
-  it('is idempotent when already confirming', async () => {
+  it('returns 409 when already confirming (claimed by another worker)', async () => {
+    // Atomic UPDATE matches 0 rows, fallback SELECT shows confirming
+    mockUpdateReturning.mockResolvedValueOnce([]);
     mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
     const res = await postConfirming(
       new Request('http://x', { method: 'POST', headers: auth.headers }),
       { params }
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
   });
 
   it('returns 409 from awaiting_setup', async () => {
+    mockUpdateReturning.mockResolvedValueOnce([]);
     mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'awaiting_setup' }]);
     const res = await postConfirming(
       new Request('http://x', { method: 'POST', headers: auth.headers }),
