@@ -5,7 +5,7 @@ const mockUpdate = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   db: {
-    select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: mockSelect }) }), where: () => ({ orderBy: mockSelect, limit: mockSelect }) }) }),
+    select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: mockSelect, limit: mockSelect }) }), where: () => ({ orderBy: mockSelect, limit: mockSelect }) }) }),
     update: () => ({ set: () => ({ where: mockUpdate }) }),
   },
 }));
@@ -14,6 +14,8 @@ import { GET as getPending } from '../src/app/api/admin/pending-projects/route';
 import { GET as getAwaiting } from '../src/app/api/admin/pending-projects/awaiting-setup/route';
 import { POST as postAwaitingSetup } from '../src/app/api/admin/pending-projects/[id]/awaiting-setup/route';
 import { POST as postFinish } from '../src/app/api/admin/pending-projects/[id]/finish/route';
+import { POST as postConfirming } from '../src/app/api/admin/pending-projects/[id]/confirming/route';
+import { GET as getById } from '../src/app/api/admin/pending-projects/[id]/route';
 
 const SECRET = 'test-secret-xyz';
 beforeEach(() => {
@@ -150,5 +152,73 @@ describe('GET awaiting-setup', () => {
     mockSelect.mockResolvedValueOnce([{ id: 'u1', airtableRecordId: 'recA' }]);
     const res = await getAwaiting(new Request('http://x', auth));
     expect(res.status).toBe(200);
+  });
+});
+
+describe('POST confirming', () => {
+  const params = Promise.resolve({ id: 'u1' });
+
+  it('returns 401 without auth', async () => {
+    const res = await postConfirming(new Request('http://x', { method: 'POST' }), { params });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when row missing', async () => {
+    mockSelect.mockResolvedValueOnce([]);
+    const res = await postConfirming(
+      new Request('http://x', { method: 'POST', headers: auth.headers }),
+      { params }
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('transitions pending -> confirming', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'pending' }]);
+    const res = await postConfirming(
+      new Request('http://x', { method: 'POST', headers: auth.headers }),
+      { params }
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('is idempotent when already confirming', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
+    const res = await postConfirming(
+      new Request('http://x', { method: 'POST', headers: auth.headers }),
+      { params }
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 409 from awaiting_setup', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'awaiting_setup' }]);
+    const res = await postConfirming(
+      new Request('http://x', { method: 'POST', headers: auth.headers }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('GET /api/admin/pending-projects/:id', () => {
+  const params = Promise.resolve({ id: 'u1' });
+
+  it('returns 401 without auth', async () => {
+    const res = await getById(new Request('http://x'), { params });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when row missing', async () => {
+    mockSelect.mockResolvedValueOnce([]);
+    const res = await getById(new Request('http://x', auth), { params });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns row regardless of status', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', name: 'TestCo' }]);
+    const res = await getById(new Request('http://x', auth), { params });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.row.status).toBe('confirming');
   });
 });

@@ -78,7 +78,7 @@ export const pendingProjects = pgTable('pending_projects', {
   createdByFellowId: text('created_by_fellow_id').notNull(),
   createdByFellowName: text('created_by_fellow_name').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
-  status: text('status', { enum: ['pending', 'awaiting_setup', 'finished'] }).notNull().default('pending'),
+  status: text('status', { enum: ['pending', 'awaiting_setup', 'finished', 'confirming'] }).notNull().default('pending'),
   airtableRecordId: text('airtable_record_id'),
   resolution: text('resolution', { enum: ['completed', 'rejected'] }),
   resolvedAt: timestamp('resolved_at'),
