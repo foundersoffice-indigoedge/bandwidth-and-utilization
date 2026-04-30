@@ -34,22 +34,3 @@ export async function fetchAllRecords(
 
   return all;
 }
-
-export async function updateRecord(
-  tableId: string,
-  recordId: string,
-  fields: Record<string, unknown>
-): Promise<void> {
-  const res = await fetch(
-    `${BASE_URL}/${process.env.AIRTABLE_BASE_ID}/${tableId}/${recordId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ fields }),
-    }
-  );
-  if (!res.ok) throw new Error(`Airtable update ${recordId}: ${res.status} ${await res.text()}`);
-}

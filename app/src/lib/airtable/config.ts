@@ -8,7 +8,6 @@ export const TABLE_CONFIG: Record<ProjectType, {
   stageField: string;
   vpAvpFields: string[];
   associateFields: string[];
-  bandwidthField: string;
   isVpRunField?: string;
   activeStages: string[];
   label: string;
@@ -19,7 +18,6 @@ export const TABLE_CONFIG: Record<ProjectType, {
     stageField: 'Current Stage of Mandate',
     vpAvpFields: ['Mandate VP / AVP 1', 'Mandate VP / AVP 2'],
     associateFields: ['Mandate Associate 1', 'Mandate Associate 2'],
-    bandwidthField: 'Mandate Bandwidth Situation',
     isVpRunField: 'Is this a VP run mandate?',
     activeStages: [
       'Not Started',
@@ -38,7 +36,6 @@ export const TABLE_CONFIG: Record<ProjectType, {
     stageField: 'Current Stage of DDE',
     vpAvpFields: ['DDE VP / AVP'],
     associateFields: ['DDE Associate'],
-    bandwidthField: 'DDE Bandwidth Situation',
     activeStages: [
       'Not Started',
       'DDE In Progress',
@@ -51,7 +48,6 @@ export const TABLE_CONFIG: Record<ProjectType, {
     stageField: 'Pitch Status',
     vpAvpFields: ['Pitch VP / AVP', 'Pitch VP / AVP 2'],
     associateFields: ['Pitch Associate 1', 'Pitch Associate 2'],
-    bandwidthField: 'Pitch Bandwidth Situation',
     activeStages: [
       'Pitch Work in Progress',
       'Pitch Done - Awaiting Outcome',

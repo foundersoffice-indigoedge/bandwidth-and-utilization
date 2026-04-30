@@ -254,15 +254,9 @@ export async function sendCompletionEmail(
   cycleStartDate: string,
   submissionCount: number,
   conflictCount: number,
-  projectCount: number,
-  failures: Array<{ projectName: string; error: string }>,
   fellowSummaries: FellowSummary[] = []
 ) {
   const dateRange = formatDateRange(cycleStartDate);
-
-  const failureHtml = failures.length > 0
-    ? `<p style="color:#dc2626"><strong>Failures:</strong></p><ul>${failures.map(f => `<li>${f.projectName}: ${f.error}</li>`).join('')}</ul>`
-    : '';
 
   const fellowRows = fellowSummaries
     .sort((a, b) => b.utilizationPct - a.utilizationPct)
@@ -306,10 +300,9 @@ export async function sendCompletionEmail(
     html: `
       <p style="font-size:16px;font-weight:600;margin-bottom:4px">Cycle Complete: ${dateRange}</p>
       <div style="background:#f0fdf4;padding:12px 16px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
-        <p style="margin:0;font-size:14px"><strong>${submissionCount}</strong> submissions processed · <strong>${conflictCount}</strong> conflict${conflictCount !== 1 ? 's' : ''} resolved · <strong>${projectCount}</strong> project${projectCount !== 1 ? 's' : ''} written to Airtable${failures.length > 0 ? ' (with failures)' : ''}</p>
+        <p style="margin:0;font-size:14px"><strong>${submissionCount}</strong> submissions processed · <strong>${conflictCount}</strong> conflict${conflictCount !== 1 ? 's' : ''} resolved</p>
       </div>
       ${fellowTableHtml}
-      ${failureHtml}
       <p style="margin-top:24px"><a href="${process.env.APP_URL}/dashboard" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">View Dashboard</a></p>
     `,
   });

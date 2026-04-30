@@ -4,7 +4,6 @@ import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
-import { generateNarrative, writeBandwidthToAirtable } from '@/lib/airtable/writeback';
 import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
@@ -118,54 +117,8 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     .where(eq(submissions.cycleId, cycleId));
 
   const fellows = await fetchEligibleFellows();
-  const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
   const allProjects = await fetchAllProjects();
   const projectMap = new Map(allProjects.map(p => [p.projectRecordId, p]));
-  const failures: Array<{ projectName: string; error: string }> = [];
-
-  // Group self-report submissions by project for Airtable write-back
-  const projectSubmissions = new Map<string, typeof allSubmissions>();
-  for (const sub of allSubmissions) {
-    if (!sub.isSelfReport) continue;
-    const existing = projectSubmissions.get(sub.projectRecordId) || [];
-    existing.push(sub);
-    projectSubmissions.set(sub.projectRecordId, existing);
-  }
-
-  // Write narratives to Airtable
-  let projectCount = 0;
-  for (const [projectRecordId, subs] of projectSubmissions) {
-    const firstSub = subs[0];
-    const projectData = projectMap.get(projectRecordId);
-    const entries = subs.map(s => ({
-      fellowName: fellowMap.get(s.fellowRecordId)?.name || s.fellowRecordId,
-      score: s.autoScore,
-      hoursPerDay: s.hoursPerDay,
-      stage: projectData?.stage || '',
-    }));
-
-    const narrative = generateNarrative(
-      firstSub.projectName,
-      firstSub.projectType as ProjectType,
-      cycle.startDate,
-      entries
-    );
-
-    if (process.env.DISABLE_AIRTABLE_WRITEBACK === 'true') {
-      projectCount++;
-      continue;
-    }
-    try {
-      await writeBandwidthToAirtable(
-        projectRecordId,
-        firstSub.projectType as ProjectType,
-        narrative
-      );
-      projectCount++;
-    } catch (err) {
-      failures.push({ projectName: firstSub.projectName, error: String(err) });
-    }
-  }
 
   // Create snapshots per fellow and collect summaries for email
   const dateStr = cycle.startDate;
@@ -231,8 +184,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     cycle.startDate,
     allSubmissions.filter(s => s.isSelfReport).length,
     conflictCount,
-    projectCount,
-    failures,
     fellowSummaries
   );
 }
