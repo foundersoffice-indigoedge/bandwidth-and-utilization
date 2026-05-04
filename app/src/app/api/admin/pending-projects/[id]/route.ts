@@ -30,6 +30,7 @@ export async function GET(
       name: pendingProjects.name,
       directorRecordId: pendingProjects.directorRecordId,
       directorName: pendingProjects.directorName,
+      createdByFellowId: pendingProjects.createdByFellowId,
       teammateRecordIds: pendingProjects.teammateRecordIds,
       createdByFellowName: pendingProjects.createdByFellowName,
       createdAt: pendingProjects.createdAt,

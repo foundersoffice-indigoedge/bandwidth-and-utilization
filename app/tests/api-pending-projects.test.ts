@@ -54,6 +54,44 @@ describe('GET /api/admin/pending-projects', () => {
     const body = await res.json();
     expect(body.rows).toHaveLength(1);
   });
+
+  it('includes createdByFellowId in returned rows', async () => {
+    mockSelect.mockResolvedValueOnce([
+      {
+        id: 'u1',
+        type: 'dde',
+        name: 'TestCo',
+        directorRecordId: 'recDir1',
+        directorName: 'Director A',
+        teammateRecordIds: ['recTeam1'],
+        createdByFellowName: 'Fellow A',
+        createdByFellowId: 'recSEED1',
+        createdAt: new Date(),
+        cycleStartDate: new Date(),
+      },
+      {
+        id: 'u2',
+        type: 'qde',
+        name: 'AnotherCo',
+        directorRecordId: 'recDir2',
+        directorName: 'Director B',
+        teammateRecordIds: ['recTeam2'],
+        createdByFellowName: 'Fellow B',
+        createdByFellowId: 'recSEED2',
+        createdAt: new Date(),
+        cycleStartDate: new Date(),
+      },
+    ]);
+    const res = await getPending(new Request('http://x', auth));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.rows.length).toBeGreaterThan(0);
+    for (const row of body.rows) {
+      expect(row).toHaveProperty('createdByFellowId');
+      expect(typeof row.createdByFellowId).toBe('string');
+      expect(row.createdByFellowId.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe('POST awaiting-setup', () => {
@@ -241,5 +279,30 @@ describe('GET /api/admin/pending-projects/:id', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.row.status).toBe('confirming');
+  });
+
+  it('includes createdByFellowId in returned row', async () => {
+    mockSelect.mockResolvedValueOnce([
+      {
+        id: 'u1',
+        type: 'dde',
+        name: 'TestCo',
+        directorRecordId: 'recDir1',
+        directorName: 'Director A',
+        teammateRecordIds: ['recTeam1'],
+        createdByFellowName: 'Fellow A',
+        createdByFellowId: 'recSEED1',
+        createdAt: new Date(),
+        status: 'confirming',
+        airtableRecordId: 'recAT1',
+        cycleStartDate: new Date(),
+      },
+    ]);
+    const res = await getById(new Request('http://x', auth), { params });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.row).toHaveProperty('createdByFellowId');
+    expect(typeof body.row.createdByFellowId).toBe('string');
+    expect(body.row.createdByFellowId.length).toBeGreaterThan(0);
   });
 });
