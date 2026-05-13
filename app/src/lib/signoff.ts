@@ -339,46 +339,52 @@ export async function submitFlags(params: {
     return { ...item, resolver };
   });
 
-  // DB transaction: update signoff + insert all conflict rows
+  // Sequential writes (neon-http driver has no transactions).
+  // Order: insert all conflicts first, then atomically flip signoff status with a status guard.
+  // If the signoff guard fails (race), roll back by deleting the just-inserted conflicts.
   const insertedRows: Array<{ id: string; resolutionToken: string | null }> = [];
 
-  await db.transaction(async (tx) => {
-    // Flip signoff to flagged
-    await tx
-      .update(directorSignoffs)
-      .set({ status: 'flagged', flaggedAt: new Date(), updatedAt: new Date() })
-      .where(eq(directorSignoffs.id, signoff.id));
+  for (const item of withResolvers) {
+    const [row] = await db
+      .insert(conflictsTable)
+      .values({
+        cycleId: signoff.cycleId,
+        projectRecordId: item.submission.projectRecordId,
+        vpSubmissionId: null,
+        associateSubmissionId: null,
+        vpHoursPerDay: null,
+        associateHoursPerDay: null,
+        difference: null,
+        status: 'pending',
+        resolutionToken: randomUUID(),
+        source: 'director_flag',
+        flaggedSubmissionId: item.submission.id,
+        flaggedByFellowId: signoff.directorFellowId,
+        flaggedOriginalHoursPerDay: item.submission.hoursPerDay,
+        proposedHoursPerDay: item.input.proposedHoursPerDay ?? null,
+        directorComment: item.input.comment ?? null,
+        signoffId: signoff.id,
+        resolverFellowId: item.resolver.resolverFellowId,
+        resolverEmail: item.resolver.resolverEmail,
+      })
+      .returning({ id: conflictsTable.id, resolutionToken: conflictsTable.resolutionToken });
+    insertedRows.push(row);
+  }
 
-    // Insert one conflict row per flag
-    for (const item of withResolvers) {
-      const [row] = await tx
-        .insert(conflictsTable)
-        .values({
-          cycleId: signoff.cycleId,
-          projectRecordId: item.submission.projectRecordId,
-          // submission-source columns: null for director_flag rows
-          vpSubmissionId: null,
-          associateSubmissionId: null,
-          vpHoursPerDay: null,
-          associateHoursPerDay: null,
-          difference: null,
-          status: 'pending',
-          resolutionToken: randomUUID(),
-          // director-flag fields
-          source: 'director_flag',
-          flaggedSubmissionId: item.submission.id,
-          flaggedByFellowId: signoff.directorFellowId,
-          flaggedOriginalHoursPerDay: item.submission.hoursPerDay,
-          proposedHoursPerDay: item.input.proposedHoursPerDay ?? null,
-          directorComment: item.input.comment ?? null,
-          signoffId: signoff.id,
-          resolverFellowId: item.resolver.resolverFellowId,
-          resolverEmail: item.resolver.resolverEmail,
-        })
-        .returning({ id: conflictsTable.id, resolutionToken: conflictsTable.resolutionToken });
-      insertedRows.push(row);
+  // Atomic status flip — only succeeds if signoff is still 'email_sent'
+  const updated = await db
+    .update(directorSignoffs)
+    .set({ status: 'flagged', flaggedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(directorSignoffs.id, signoff.id), eq(directorSignoffs.status, 'email_sent')))
+    .returning({ id: directorSignoffs.id });
+
+  if (updated.length === 0) {
+    // Race lost — another caller already transitioned this signoff. Roll back conflicts.
+    for (const row of insertedRows) {
+      await db.delete(conflictsTable).where(eq(conflictsTable.id, row.id));
     }
-  });
+    throw new Error('Signoff state changed during flag submission — please retry');
+  }
 
   const conflictIds = insertedRows.map(r => r.id);
 
