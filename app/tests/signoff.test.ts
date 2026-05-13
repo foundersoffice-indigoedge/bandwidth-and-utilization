@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { getDirectorSliceStatus, type SliceInput } from '../src/lib/signoff';
+import { describe, it, expect, vi } from 'vitest';
+import { getDirectorSliceStatus, createSignoffIfReady, type SliceInput } from '../src/lib/signoff';
 import type { ProjectAssignment } from '../src/types';
 
 const baseProject = (id: string, overrides: Partial<ProjectAssignment> = {}): ProjectAssignment => ({
@@ -109,5 +109,34 @@ describe('getDirectorSliceStatus', () => {
       conflicts: [],
     };
     expect(getDirectorSliceStatus(input)).toBe('complete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createSignoffIfReady — DB integration tests (skipped until integration infra exists)
+// ---------------------------------------------------------------------------
+
+vi.mock('../src/lib/email', () => ({
+  sendDirectorSignoffEmail: vi.fn().mockResolvedValue('msg_test_123'),
+  sendDirectorFlagResolutionEmail: vi.fn().mockResolvedValue('msg_flag_123'),
+}));
+
+describe('createSignoffIfReady — DB integration', () => {
+  it.skip('inserts a signoff row + sends email when slice is complete', async () => {
+    // Setup: insert cycle, director fellow, project, submissions with all tokens submitted
+    // Call createSignoffIfReady(cycleId, directorFellowId)
+    // Assert: 1 row in director_signoffs, status='email_sent', emailMessageId='msg_test_123'
+  });
+
+  it.skip('does nothing when slice is incomplete (pending token exists)', async () => {
+    // Setup: insert pending token for a fellow on the director's project
+    // Call createSignoffIfReady
+    // Assert: 0 rows in director_signoffs
+  });
+
+  it.skip('idempotency: second call returns { created: false } and does not double-send', async () => {
+    // Setup: pre-insert signoff row
+    // Call createSignoffIfReady
+    // Assert: still 1 row, sendDirectorSignoffEmail not called
   });
 });
