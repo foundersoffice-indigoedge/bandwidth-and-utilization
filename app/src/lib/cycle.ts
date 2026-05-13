@@ -107,12 +107,14 @@ export async function finalizeStaleCycles(): Promise<string[]> {
 
   const finalizedIds: string[] = [];
   for (const cycle of staleCycles) {
+    // Step 1: Auto-resolve dangling submission-source conflicts (VP-as-truth).
     const pendingConflicts = await db
       .select()
       .from(conflicts)
       .where(and(eq(conflicts.cycleId, cycle.id), eq(conflicts.status, 'pending')));
 
     for (const conflict of pendingConflicts) {
+      if (conflict.source === 'director_flag') continue; // handled below
       await db
         .update(conflicts)
         .set({
@@ -121,6 +123,60 @@ export async function finalizeStaleCycles(): Promise<string[]> {
           resolvedBy: 'system-auto-close',
         })
         .where(eq(conflicts.id, conflict.id));
+    }
+
+    // Step 2: Auto-confirm open director signoffs so finalizeCycle's third gate passes.
+    const cycleSignoffs = await db
+      .select()
+      .from(directorSignoffs)
+      .where(eq(directorSignoffs.cycleId, cycle.id));
+
+    for (const signoff of cycleSignoffs) {
+      if (signoff.status === 'email_sent') {
+        await db
+          .update(directorSignoffs)
+          .set({
+            status: 'confirmed' as const,
+            confirmedAt: new Date(),
+            confirmedBy: 'system_stale_close',
+            updatedAt: new Date(),
+          })
+          .where(eq(directorSignoffs.id, signoff.id));
+      } else if (signoff.status === 'flagged') {
+        // Director flagged but their child director_flag conflicts are still pending.
+        // Resolve those conflicts with keep-original semantics, then close the signoff.
+        const directorFlagConflicts = await db
+          .select()
+          .from(conflicts)
+          .where(
+            and(
+              eq(conflicts.cycleId, cycle.id),
+              eq(conflicts.source, 'director_flag'),
+              eq(conflicts.status, 'pending'),
+              eq(conflicts.signoffId, signoff.id),
+            )
+          );
+
+        for (const c of directorFlagConflicts) {
+          await db
+            .update(conflicts)
+            .set({
+              status: 'resolved' as const,
+              resolvedHoursPerDay: c.flaggedOriginalHoursPerDay ?? c.vpHoursPerDay,
+              resolvedBy: 'system_stale_close_keep_original',
+            })
+            .where(eq(conflicts.id, c.id));
+        }
+
+        await db
+          .update(directorSignoffs)
+          .set({
+            status: 'flagged_resolved' as const,
+            resolvedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(directorSignoffs.id, signoff.id));
+      }
     }
 
     await finalizeCycle(cycle.id);

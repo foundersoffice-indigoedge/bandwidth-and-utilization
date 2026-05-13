@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { notFound, redirect } from 'next/navigation';
 import { ResolutionView } from './form';
 import { DirectorFlagResolveForm } from './director-flag-form';
+import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 
 export default async function ResolvePage({
   params,
@@ -41,6 +42,9 @@ export default async function ResolvePage({
         .limit(1);
       if (sub) {
         submissionProjectName = sub.projectName;
+        const fellows = await fetchEligibleFellows();
+        const fellow = fellows.find(f => f.recordId === sub.fellowRecordId);
+        submissionFellowName = fellow?.name || 'Unknown';
       }
     }
 

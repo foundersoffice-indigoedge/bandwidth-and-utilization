@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { formatDateRange } from '@/lib/schedule';
+import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
@@ -337,8 +338,8 @@ export async function sendDirectorFlagResolutionEmail(params: {
           resolutionToken } = params;
   const typeLabel = projectType === 'mandate' ? 'Mandate' : projectType === 'dde' ? 'DDE' : 'Pitch';
   const appUrl = process.env.APP_URL || '';
-  const originalHrsPerWeek = (originalHoursPerDay * 6).toFixed(1);
-  const proposedHrsPerWeek = proposedHoursPerDay !== null ? (proposedHoursPerDay * 6).toFixed(1) : null;
+  const originalHrsPerWeek = (originalHoursPerDay * WORKING_DAYS_PER_WEEK).toFixed(1);
+  const proposedHrsPerWeek = proposedHoursPerDay !== null ? (proposedHoursPerDay * WORKING_DAYS_PER_WEEK).toFixed(1) : null;
 
   const keepLink = `${appUrl}/resolve/${resolutionToken}?action=keep_original`;
   const proposedLink = `${appUrl}/resolve/${resolutionToken}?action=use_proposed`;
