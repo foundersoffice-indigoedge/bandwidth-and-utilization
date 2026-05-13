@@ -140,3 +140,70 @@ describe('createSignoffIfReady — DB integration', () => {
     // Assert: still 1 row, sendDirectorSignoffEmail not called
   });
 });
+
+// ---------------------------------------------------------------------------
+// submitFlags — DB integration tests (skipped until integration infra exists)
+// ---------------------------------------------------------------------------
+
+describe('submitFlags — DB integration', () => {
+  it.skip('inserts conflict rows + flips signoff to flagged within a single transaction', async () => {
+    // Setup: signoff row in email_sent + submissions in director's slice
+    // Call submitFlags({ signoffToken, flags: [{ submissionId, proposedHoursPerDay: 2 }] })
+    // Assert: signoff.status='flagged', 1 conflicts row with source='director_flag'
+  });
+
+  it.skip('rejects empty flags array', async () => {
+    // Call submitFlags({ signoffToken: 'x', flags: [] })
+    // Expect: thrown error 'At least one flag required'
+  });
+
+  it.skip('rejects flag with neither proposedHoursPerDay nor comment', async () => {
+    // Expect: thrown error about proposed value or comment required
+  });
+
+  it.skip('rejects duplicate submissionIds in the flags array', async () => {
+    // Expect: thrown error about duplicate flag
+  });
+
+  it.skip('rejects submission from outside the director slice', async () => {
+    // Expect: thrown error about not in director slice
+  });
+
+  it.skip('sends resolution email per flag and stores emailMessageId on conflict row', async () => {
+    // Assert: conflicts row has emailMessageId set after submitFlags
+  });
+});
+
+// ---------------------------------------------------------------------------
+// transitionToFlaggedResolved + confirmSignoff — integration tests (skipped)
+// ---------------------------------------------------------------------------
+
+describe('transitionToFlaggedResolved — DB integration', () => {
+  it.skip('flips signoff to flagged_resolved when last child conflict resolves', async () => {
+    // Setup: signoff in flagged + 1 pending conflict row
+    // Resolve the conflict
+    // Call transitionToFlaggedResolved(signoffId)
+    // Assert: signoff.status='flagged_resolved', resolvedAt set
+  });
+
+  it.skip('returns false when pending child conflicts still exist', async () => {
+    // Setup: signoff in flagged + 2 pending conflict rows
+    // Resolve 1 of them
+    // Call transitionToFlaggedResolved
+    // Assert: returns false, signoff still flagged
+  });
+});
+
+describe('confirmSignoff — DB integration', () => {
+  it.skip('flips email_sent signoff to confirmed', async () => {
+    // Setup: signoff in email_sent
+    // Call confirmSignoff(token)
+    // Assert: { confirmed: true }, confirmedAt set, confirmedBy='director'
+  });
+
+  it.skip('returns { confirmed: false } when signoff already confirmed', async () => {
+    // Setup: signoff in confirmed
+    // Call confirmSignoff again
+    // Assert: { confirmed: false }
+  });
+});
