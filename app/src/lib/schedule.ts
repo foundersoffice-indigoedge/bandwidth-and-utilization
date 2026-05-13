@@ -26,3 +26,9 @@ export function getCycleEndDate(startDate: Date | string): Date {
   end.setDate(end.getDate() - 1);
   return end;
 }
+
+export function formatDateRange(startDate: string): string {
+  const start = new Date(startDate);
+  const end = getCycleEndDate(start);
+  return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}

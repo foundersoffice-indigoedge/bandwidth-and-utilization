@@ -45,3 +45,18 @@ export interface ProjectBreakdownItem {
   leadFellowName?: string;
   hasConflict?: boolean;
 }
+
+export interface SignoffLine {
+  submissionId: string;
+  fellowName: string;
+  designation: string;
+  hoursPerDay: number;
+  hoursPerWeek: number;
+}
+
+export interface SignoffProjectGroup {
+  projectRecordId: string;
+  projectName: string;
+  projectType: 'mandate' | 'dde' | 'pitch';
+  lines: SignoffLine[];
+}

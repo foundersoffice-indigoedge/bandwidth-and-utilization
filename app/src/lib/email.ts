@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
-import { getCycleEndDate } from '@/lib/schedule';
+import { formatDateRange } from '@/lib/schedule';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
@@ -26,12 +26,6 @@ function standardCc(): string[] {
   return overrideCc(
     [process.env.CC_EMAIL!, process.env.ADMIN_EMAIL!].filter(Boolean)
   );
-}
-
-function formatDateRange(startDate: string): string {
-  const start = new Date(startDate);
-  const end = getCycleEndDate(start);
-  return `${start.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
 const TYPE_ORDER: { type: ProjectType; label: string; color: string; bg: string }[] = [
@@ -228,6 +222,97 @@ export async function sendConflictReminderEmail(
         <a href="${appUrl}/resolve/${resolutionToken}?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (${vpHours} hrs/day)</a>
         <a href="${appUrl}/resolve/${resolutionToken}?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
       </div>
+    `,
+  });
+}
+
+// --- Director Sign-off Email ---
+export async function sendDirectorSignoffEmail(params: {
+  directorName: string;
+  directorEmail: string;
+  cycleStartDate: string;
+  signoffToken: string;
+  groups: import('@/types').SignoffProjectGroup[];
+}): Promise<string | undefined> {
+  const { directorName, directorEmail, cycleStartDate, signoffToken, groups } = params;
+  const dateRange = formatDateRange(cycleStartDate);
+  const appUrl = process.env.APP_URL || '';
+  const link = `${appUrl}/signoff/${signoffToken}`;
+  const projectCount = groups.length;
+
+  const groupsHtml = groups.map(g => {
+    const typeLabel = g.projectType === 'mandate' ? 'Mandate' : g.projectType === 'dde' ? 'DDE' : 'Pitch';
+    const rows = g.lines.map((l, i) => {
+      const bg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
+      return `<tr style="background:${bg}">
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${l.fellowName}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${l.designation}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">${l.hoursPerDay.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">${l.hoursPerWeek.toFixed(1)}</td>
+      </tr>`;
+    }).join('');
+    return `<div style="margin:20px 0">
+      <p style="font-weight:600;margin:0 0 6px;font-size:14px">${g.projectName} <span style="font-size:11px;color:#6b7280;font-weight:400">(${typeLabel})</span></p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Person</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Designation</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/day</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/week</th>
+        </tr>
+        ${rows}
+      </table>
+    </div>`;
+  }).join('');
+
+  return await sendEmail({
+    from,
+    to: overrideTo(directorEmail),
+    cc: standardCc(),
+    subject: `Bandwidth Sign-off — ${dateRange} — ${projectCount} project${projectCount !== 1 ? 's' : ''}`,
+    html: `
+      <p>Hi ${directorName},</p>
+      <p>Your team has finished reporting bandwidth on the projects you direct for the cycle of <strong>${dateRange}</strong>. Please review the summary below and either confirm everything looks right or flag specific lines you think need a second look.</p>
+      <p style="margin:24px 0">
+        <a href="${link}" style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Review & confirm bandwidth →</a>
+      </p>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 8px">One-click confirmation if everything looks right. Or flag specific lines and we'll route them for resolution.</p>
+      ${groupsHtml}
+      <p style="font-size:12px;color:#9ca3af;margin-top:32px">A reminder will be sent daily until this is responded to.</p>
+    `,
+  });
+}
+
+// --- Director Sign-off Reminder ---
+export async function sendDirectorSignoffReminderEmail(params: {
+  directorName: string;
+  directorEmail: string;
+  cycleStartDate: string;
+  signoffToken: string;
+  originalMessageId: string | null;
+}): Promise<string | undefined> {
+  const { directorName, directorEmail, cycleStartDate, signoffToken, originalMessageId } = params;
+  const dateRange = formatDateRange(cycleStartDate);
+  const appUrl = process.env.APP_URL || '';
+  const link = `${appUrl}/signoff/${signoffToken}`;
+
+  const headers: Record<string, string> = {};
+  if (originalMessageId) {
+    headers['In-Reply-To'] = originalMessageId;
+    headers['References'] = originalMessageId;
+  }
+
+  return await sendEmail({
+    from,
+    to: overrideTo(directorEmail),
+    subject: `Re: Bandwidth Sign-off — ${dateRange}`,
+    headers,
+    html: `
+      <p>Hi ${directorName},</p>
+      <p>Friendly nudge — your bandwidth sign-off for <strong>${dateRange}</strong> is still pending.</p>
+      <p style="margin:24px 0">
+        <a href="${link}" style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Open sign-off →</a>
+      </p>
     `,
   });
 }
