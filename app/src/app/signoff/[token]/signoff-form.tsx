@@ -31,11 +31,8 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
 
   const enabledFlags = Object.values(flags).filter(f => f.enabled);
   const validFlags = enabledFlags.filter(f => {
-    const hasValue =
-      f.proposedHoursPerDay !== '' &&
-      !Number.isNaN(Number(f.proposedHoursPerDay));
-    const hasComment = f.comment.trim().length > 0;
-    return hasValue || hasComment;
+    const parsed = Number(f.proposedHoursPerDay);
+    return f.proposedHoursPerDay !== '' && !Number.isNaN(parsed) && parsed > 0;
   });
 
   async function handleConfirm() {
@@ -207,12 +204,13 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
                         <td colSpan={5} style={{ padding: 12 }}>
                           <div style={{ marginBottom: 8 }}>
                             <label style={{ fontSize: 13, marginRight: 8 }}>
-                              Proposed correct value (optional):
+                              Proposed correct value:
                             </label>
                             <input
                               type="number"
                               step="0.25"
-                              min="0"
+                              min="0.01"
+                              required
                               value={f.proposedHoursPerDay}
                               onChange={e =>
                                 setFlags(prev => ({
@@ -251,7 +249,7 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
                                 fontSize: 13,
                                 boxSizing: 'border-box',
                               }}
-                              placeholder="At least one of proposed value or comment is required"
+                              placeholder="Optional context for the resolver"
                             />
                           </div>
                         </td>

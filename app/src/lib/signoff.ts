@@ -256,12 +256,14 @@ export async function submitFlags(params: {
 
   if (flags.length === 0) throw new Error('At least one flag required');
 
-  // Validate each flag has proposed value or comment
+  // Validate each flag has a proposed value (required); comment is optional
   for (const f of flags) {
-    const hasValue = typeof f.proposedHoursPerDay === 'number' && !Number.isNaN(f.proposedHoursPerDay);
-    const hasComment = typeof f.comment === 'string' && f.comment.trim().length > 0;
-    if (!hasValue && !hasComment) {
-      throw new Error(`Flag for submission ${f.submissionId} must include a proposed value or a comment`);
+    const hasValue =
+      typeof f.proposedHoursPerDay === 'number' &&
+      !Number.isNaN(f.proposedHoursPerDay) &&
+      f.proposedHoursPerDay > 0;
+    if (!hasValue) {
+      throw new Error(`Flag for submission ${f.submissionId} must include a proposed value (positive number)`);
     }
   }
 

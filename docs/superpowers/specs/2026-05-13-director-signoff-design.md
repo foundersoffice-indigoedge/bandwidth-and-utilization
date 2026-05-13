@@ -72,7 +72,7 @@ The existing `conflicts` table represents a two-sided disagreement (VP submissio
 | `flaggedSubmissionId` | NEW, uuid FK → `submissions.id`, nullable | set for `director_flag` rows only |
 | `flaggedByFellowId` | NEW, text, nullable | the director's fellow record id (for `director_flag` rows) |
 | `flaggedOriginalHoursPerDay` | NEW, real, nullable | snapshot of the value the director is flagging |
-| `proposedHoursPerDay` | NEW, real, nullable | director's proposed value, or NULL if they only commented |
+| `proposedHoursPerDay` | NEW, real, nullable | director's proposed value. Nullable in DB for backwards compat with any existing rows; at insert time always set to a positive number (application-level requirement). |
 | `directorComment` | NEW, text, nullable | director's free-text note |
 | `signoffId` | NEW, uuid FK → `director_signoffs.id`, nullable | parent signoff for `director_flag` rows |
 | `resolverFellowId` | NEW, text, nullable | the resolver's Airtable record id (the TO recipient on the resolution email). Set for `director_flag` rows at insert time so the reminder cron doesn't have to re-derive via Airtable each tick. Existing `submission` rows leave this NULL (cron continues to derive from `vpSubmissionId` for those). |
@@ -86,7 +86,7 @@ The existing `conflicts` table represents a two-sided disagreement (VP submissio
 **Application-level invariants** (not enforced by CHECK constraints — discipline in the insert paths):
 
 - `source='submission'`: `vpSubmissionId`, `associateSubmissionId`, `vpHoursPerDay`, `associateHoursPerDay`, `difference` all populated; `flaggedSubmissionId`, `signoffId`, `flaggedByFellowId`, `flaggedOriginalHoursPerDay`, `proposedHoursPerDay`, `directorComment` all NULL.
-- `source='director_flag'`: `flaggedSubmissionId`, `flaggedByFellowId`, `flaggedOriginalHoursPerDay`, `signoffId` all populated; at least one of `proposedHoursPerDay` or `directorComment` populated (UI validation, also a server-side guard); `vpSubmissionId`, `associateSubmissionId`, `vpHoursPerDay`, `associateHoursPerDay`, `difference` all NULL.
+- `source='director_flag'`: `flaggedSubmissionId`, `flaggedByFellowId`, `flaggedOriginalHoursPerDay`, `signoffId` all populated; `proposedHoursPerDay` always set to a valid positive number (required — UI enforces, server-side rejects otherwise); `directorComment` optional (may be NULL); `vpSubmissionId`, `associateSubmissionId`, `vpHoursPerDay`, `associateHoursPerDay`, `difference` all NULL.
 
 ### 4.3 No changes to
 
@@ -266,11 +266,10 @@ If the token is invalid or the signoff is already terminal, render a status page
 │                                                      │
 │  [ flagged-row expansion: ]                          │
 │  ┌──────────────────────────────────────────────┐    │
-│  │ Proposed correct value (optional):           │    │
-│  │ [_____] hrs/day                              │    │
+│  │ Proposed correct value:                      │    │
+│  │ [_____] hrs/day  (required)                  │    │
 │  │ Comment (optional):                          │    │
 │  │ [______________________________________]     │    │
-│  │ At least one of the above is required.       │    │
 │  └──────────────────────────────────────────────┘    │
 │                                                      │
 │  ─── Next Project ──────────────────────────────     │
@@ -285,15 +284,15 @@ If the token is invalid or the signoff is already terminal, render a status page
 ### 8.3 Client behavior
 
 - "Confirm all accurate" → POST `/api/signoff/confirm` with `{ token }`. On success: show success message, replace UI with a confirmation state.
-- "Flag" toggle on a row → expands inline form with optional `proposedHoursPerDay` and optional `comment`. Inline validation: at least one of the two must be non-empty before that row can count as a valid flag.
-- "Submit flags" button at the bottom → POST `/api/signoff/flag` with `{ token, flags: [{ submissionId, proposedHoursPerDay?, comment? }, ...] }`. Disabled until ≥1 row has a valid flag. On success: show success message listing what was flagged + who got the resolution email + a note that Slack was posted.
+- "Flag" toggle on a row → expands inline form with required `proposedHoursPerDay` and optional `comment`. Inline validation: `proposedHoursPerDay` must be a positive number before that row can count as a valid flag. Comment is always optional.
+- "Submit flags" button at the bottom → POST `/api/signoff/flag` with `{ token, flags: [{ submissionId, proposedHoursPerDay, comment? }, ...] }`. Disabled until ≥1 row has a valid flag. On success: show success message listing what was flagged + who got the resolution email + a note that Slack was posted.
 
 Tokens are single-use against terminal state: once the signoff is `confirmed` or `flagged`/`flagged_resolved`, the page renders the status view, not the form. (A signoff sitting at `flagged` while child conflicts are still pending shows a "thanks, resolution in progress" state.)
 
 ### 8.4 API endpoints
 
 - `POST /api/signoff/confirm` — body `{ token: string }`. Looks up the signoff, validates status is `email_sent`, transitions to `confirmed` (sets `confirmedAt = now()`, `confirmedBy = 'director'`), then runs `checkAndFinalizeCycle`. Returns 200 or 409 (already responded) / 404 (bad token).
-- `POST /api/signoff/flag` — body `{ token: string, flags: Array<{ submissionId: string, proposedHoursPerDay?: number, comment?: string }> }`. Server-side validation: token resolves to a signoff in `email_sent`; ≥1 flag; each flag has at least one of `proposedHoursPerDay` or `comment` non-empty; each `submissionId` belongs to a submission on a project in this director's slice (no cross-cycle, no out-of-scope submissions). Within a single DB transaction:
+- `POST /api/signoff/flag` — body `{ token: string, flags: Array<{ submissionId: string, proposedHoursPerDay: number, comment?: string }> }`. Server-side validation: token resolves to a signoff in `email_sent`; ≥1 flag; each flag must have `proposedHoursPerDay` as a valid positive number (comment is optional); each `submissionId` belongs to a submission on a project in this director's slice (no cross-cycle, no out-of-scope submissions). Within a single DB transaction:
   - Update signoff: `status='flagged'`, `flaggedAt=now()`.
   - For each flag, insert one `conflicts` row with `source='director_flag'`, `flaggedSubmissionId`, `flaggedByFellowId = directorFellowId`, `flaggedOriginalHoursPerDay` = submission's current `hoursPerDay`, `proposedHoursPerDay`, `directorComment`, `signoffId`, `resolutionToken = uuid()`, `status='pending'`, `projectRecordId = submission.projectRecordId`, `cycleId`.
   - After transaction commits: post one Slack message summarizing the flag set; send one resolution email per flag.
@@ -331,11 +330,11 @@ If somehow there are zero VP/AVPs AND the flagged fellow isn't reachable (e.g., 
 - **Body:**
   - `[Director Name] flagged [Fellow Name]'s bandwidth on [Project Name] ([Type]) this cycle.`
   - `Original value: [X] hrs/day ([Y] hrs/week)`
-  - `Director's proposed value: [Z] hrs/day` (line omitted if no proposed value)
+  - `Director's proposed value: [Z] hrs/day` (always present — proposed value is now required)
   - `Director's comment: "[text]"` (line omitted if no comment)
   - Three action buttons:
     1. **Keep original ([X] hrs/day)** → POST `/api/resolve` with `action='keep_original'`
-    2. **Use director's proposed value ([Z] hrs/day)** (only rendered if proposedHoursPerDay is set) → POST `/api/resolve` with `action='use_proposed'`
+    2. **Use director's proposed value ([Z] hrs/day)** → POST `/api/resolve` with `action='use_proposed'`
     3. **Provide a different value** → form with hrs/day input → POST `/api/resolve` with `action='custom'` and `customHoursPerDay`
   - All three action buttons land on `/resolve/[token]` for confirmation, same pattern as today's resolution emails.
 
@@ -448,7 +447,7 @@ No changes for v1. The monthly view shows aggregated utilization; signoff state 
 | All directors confirm, but a submission-level conflict is still open | Cycle waits on the conflict, same as today. |
 | Force-finalize via admin override | Existing override path (if any) bypasses gates. Not changing that. |
 | Cycle re-opens for any reason | Out of scope. The system doesn't support cycle re-opening today. |
-| Director flags with no proposed value AND no comment | UI prevents submission. Server-side also rejects (defense in depth). |
+| Director flags without a proposed value | UI prevents submission (proposed value is required, comment is optional). Server-side also rejects (defense in depth). |
 | Director flags the same line twice in one submission | UI doesn't allow it (Flag toggle is per-row). Server validates `submissionId` uniqueness in the `flags` array. |
 | Two submissions land at the same instant, both completing slices for different directors | Both signoff rows insert successfully (different `(cycleId, directorFellowId)`). Two emails fire. Independent. |
 | Two slice-completion checks fire for the same director simultaneously | Unique constraint serializes the insert. One succeeds, one fails with a constraint violation, which the app catches and no-ops. One email goes out. |
