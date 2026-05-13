@@ -37,21 +37,49 @@ export const submissions = pgTable('submissions', {
   hoursPerWeek: real('hours_per_week'),
 });
 
+export const directorSignoffs = pgTable('director_signoffs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),
+  directorFellowId: text('director_fellow_id').notNull(),
+  directorEmail: text('director_email').notNull(),
+  directorName: text('director_name').notNull(),
+  status: text('status', { enum: ['email_sent', 'confirmed', 'flagged', 'flagged_resolved'] }).notNull(),
+  signoffToken: text('signoff_token').unique().notNull(),
+  emailMessageId: text('email_message_id'),
+  lastReminderSentAt: timestamp('last_reminder_sent_at'),
+  confirmedAt: timestamp('confirmed_at'),
+  confirmedBy: text('confirmed_by'),
+  flaggedAt: timestamp('flagged_at'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const conflicts = pgTable('conflicts', {
   id: uuid('id').defaultRandom().primaryKey(),
   cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),
   projectRecordId: text('project_record_id').notNull(),
-  vpSubmissionId: uuid('vp_submission_id').references(() => submissions.id).notNull(),
-  associateSubmissionId: uuid('associate_submission_id').references(() => submissions.id).notNull(),
-  vpHoursPerDay: real('vp_hours_per_day').notNull(),
-  associateHoursPerDay: real('associate_hours_per_day').notNull(),
-  difference: real('difference').notNull(),
+  vpSubmissionId: uuid('vp_submission_id').references(() => submissions.id),
+  associateSubmissionId: uuid('associate_submission_id').references(() => submissions.id),
+  vpHoursPerDay: real('vp_hours_per_day'),
+  associateHoursPerDay: real('associate_hours_per_day'),
+  difference: real('difference'),
   status: text('status', { enum: ['pending', 'resolved'] }).notNull().default('pending'),
   resolvedHoursPerDay: real('resolved_hours_per_day'),
   resolvedBy: text('resolved_by'),
   resolutionToken: text('resolution_token'),
   emailMessageId: text('email_message_id'),
   lastReminderSentAt: timestamp('last_reminder_sent_at'),
+  // Director sign-off extensions
+  source: text('source', { enum: ['submission', 'director_flag'] }).notNull().default('submission'),
+  flaggedSubmissionId: uuid('flagged_submission_id').references(() => submissions.id),
+  flaggedByFellowId: text('flagged_by_fellow_id'),
+  flaggedOriginalHoursPerDay: real('flagged_original_hours_per_day'),
+  proposedHoursPerDay: real('proposed_hours_per_day'),
+  directorComment: text('director_comment'),
+  signoffId: uuid('signoff_id').references(() => directorSignoffs.id),
+  resolverFellowId: text('resolver_fellow_id'),
+  resolverEmail: text('resolver_email'),
 });
 
 export const snapshots = pgTable('snapshots', {

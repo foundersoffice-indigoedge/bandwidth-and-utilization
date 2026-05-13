@@ -59,6 +59,8 @@ export async function GET(req: NextRequest) {
   for (const conflict of pendingConflicts) {
     if (isSameIstDay(conflict.lastReminderSentAt, now)) continue;
 
+    // submission-source conflicts always have vpSubmissionId / associateSubmissionId set
+    if (!conflict.vpSubmissionId || !conflict.associateSubmissionId) continue;
     const [vpSub] = await db
       .select()
       .from(submissions)
@@ -82,8 +84,8 @@ export async function GET(req: NextRequest) {
         assocFellow.name,
         assocFellow.email,
         vpSub.projectName,
-        conflict.vpHoursPerDay,
-        conflict.associateHoursPerDay,
+        conflict.vpHoursPerDay!,
+        conflict.associateHoursPerDay!,
         conflict.resolutionToken!,
         conflict.emailMessageId!,
       );

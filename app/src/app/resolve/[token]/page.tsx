@@ -28,8 +28,8 @@ export default async function ResolvePage({
       <h1 className="text-xl font-bold mb-4">Resolve Bandwidth Conflict</h1>
       <ResolutionView
         resolutionToken={token}
-        vpHours={conflict.vpHoursPerDay}
-        associateHours={conflict.associateHoursPerDay}
+        vpHours={conflict.vpHoursPerDay!}
+        associateHours={conflict.associateHoursPerDay!}
         initialAction={action as 'use_associate' | 'use_vp' | 'custom' | undefined}
       />
     </main>

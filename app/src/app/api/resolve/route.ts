@@ -27,9 +27,9 @@ export async function POST(req: NextRequest) {
 
   let resolvedHours: number;
   if (action === 'associate_number') {
-    resolvedHours = conflict.associateHoursPerDay;
+    resolvedHours = conflict.associateHoursPerDay!;
   } else if (action === 'vp_number') {
-    resolvedHours = conflict.vpHoursPerDay;
+    resolvedHours = conflict.vpHoursPerDay!;
   } else {
     resolvedHours = customHours!;
   }
@@ -45,10 +45,12 @@ export async function POST(req: NextRequest) {
     .where(eq(conflicts.id, conflict.id));
 
   // Update the VP's projection submission with the resolved hours and re-score
+  const vpSubmissionId = conflict.vpSubmissionId!;
+  const associateSubmissionId = conflict.associateSubmissionId!;
   const [vpSub] = await db
     .select()
     .from(submissions)
-    .where(eq(submissions.id, conflict.vpSubmissionId))
+    .where(eq(submissions.id, vpSubmissionId))
     .limit(1);
 
   const resolvedHoursPerWeek = resolvedHours * WORKING_DAYS_PER_WEEK;
@@ -58,14 +60,14 @@ export async function POST(req: NextRequest) {
     await db
       .update(submissions)
       .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score })
-      .where(eq(submissions.id, conflict.vpSubmissionId));
+      .where(eq(submissions.id, vpSubmissionId));
   }
 
   // Also update the associate's self-report with resolved hours
   const [assocSub] = await db
     .select()
     .from(submissions)
-    .where(eq(submissions.id, conflict.associateSubmissionId))
+    .where(eq(submissions.id, associateSubmissionId))
     .limit(1);
 
   if (assocSub) {
@@ -73,7 +75,7 @@ export async function POST(req: NextRequest) {
     await db
       .update(submissions)
       .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score })
-      .where(eq(submissions.id, conflict.associateSubmissionId));
+      .where(eq(submissions.id, associateSubmissionId));
   }
 
   // Send resolution confirmation email (threads with original conflict email)
