@@ -317,6 +317,97 @@ export async function sendDirectorSignoffReminderEmail(params: {
   });
 }
 
+// --- Director Flag Resolution Email ---
+export async function sendDirectorFlagResolutionEmail(params: {
+  resolverName: string;
+  resolverEmail: string;
+  ccEmails: string[];
+  directorName: string;
+  fellowName: string;
+  fellowDesignation: string;
+  projectName: string;
+  projectType: 'mandate' | 'dde' | 'pitch';
+  originalHoursPerDay: number;
+  proposedHoursPerDay: number | null;
+  directorComment: string | null;
+  resolutionToken: string;
+}): Promise<string | undefined> {
+  const { resolverName, resolverEmail, ccEmails, directorName, fellowName, fellowDesignation,
+          projectName, projectType, originalHoursPerDay, proposedHoursPerDay, directorComment,
+          resolutionToken } = params;
+  const typeLabel = projectType === 'mandate' ? 'Mandate' : projectType === 'dde' ? 'DDE' : 'Pitch';
+  const appUrl = process.env.APP_URL || '';
+  const originalHrsPerWeek = (originalHoursPerDay * 6).toFixed(1);
+  const proposedHrsPerWeek = proposedHoursPerDay !== null ? (proposedHoursPerDay * 6).toFixed(1) : null;
+
+  const keepLink = `${appUrl}/resolve/${resolutionToken}?action=keep_original`;
+  const proposedLink = `${appUrl}/resolve/${resolutionToken}?action=use_proposed`;
+  const customLink = `${appUrl}/resolve/${resolutionToken}`;
+
+  const proposedBlock = proposedHoursPerDay !== null
+    ? `<p><strong>Director's proposed value:</strong> ${proposedHoursPerDay.toFixed(2)} hrs/day (${proposedHrsPerWeek} hrs/week)</p>`
+    : '';
+  const commentBlock = directorComment
+    ? `<p><strong>Director's comment:</strong> "${directorComment}"</p>`
+    : '';
+  const proposedButton = proposedHoursPerDay !== null
+    ? `<a href="${proposedLink}" style="background:#2563eb;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Use director's value (${proposedHoursPerDay.toFixed(2)})</a>`
+    : '';
+
+  return await sendEmail({
+    from,
+    to: overrideTo(resolverEmail),
+    cc: overrideCc(ccEmails),
+    subject: `Bandwidth Sign-off Flag — ${projectName} — ${fellowName}`,
+    html: `
+      <p>Hi ${resolverName},</p>
+      <p><strong>${directorName}</strong> flagged <strong>${fellowName}</strong>'s (${fellowDesignation}) bandwidth on <strong>${projectName}</strong> (${typeLabel}) this cycle.</p>
+      <p><strong>Original value:</strong> ${originalHoursPerDay.toFixed(2)} hrs/day (${originalHrsPerWeek} hrs/week)</p>
+      ${proposedBlock}
+      ${commentBlock}
+      <div style="margin:24px 0">
+        <a href="${keepLink}" style="background:#6b7280;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Keep original (${originalHoursPerDay.toFixed(2)})</a>
+        ${proposedButton}
+        <a href="${customLink}" style="background:#ffffff;color:#1e40af;border:2px solid #2563eb;padding:8px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Provide a different value</a>
+      </div>
+    `,
+  });
+}
+
+// --- Confirmation after flag resolves (threaded reply) ---
+export async function sendDirectorFlagResolutionConfirmationEmail(params: {
+  resolverEmail: string;
+  ccEmails: string[];
+  fellowName: string;
+  projectName: string;
+  finalHoursPerDay: number;
+  action: string;
+  originalMessageId: string | null;
+}): Promise<string | undefined> {
+  const { resolverEmail, ccEmails, fellowName, projectName, finalHoursPerDay, action, originalMessageId } = params;
+  const actionLabel =
+    action === 'keep_original' ? 'kept the original value' :
+    action === 'use_proposed' ? 'used the director\'s proposed value' :
+    'set a custom value';
+  const headers: Record<string, string> = {};
+  if (originalMessageId) {
+    headers['In-Reply-To'] = originalMessageId;
+    headers['References'] = originalMessageId;
+  }
+
+  return await sendEmail({
+    from,
+    to: overrideTo(resolverEmail),
+    cc: overrideCc(ccEmails),
+    subject: `Re: Bandwidth Sign-off Flag — ${projectName} — ${fellowName}`,
+    headers,
+    html: `
+      <p>Resolved: <strong>${finalHoursPerDay.toFixed(2)} hrs/day</strong>.</p>
+      <p>The resolver ${actionLabel}.</p>
+    `,
+  });
+}
+
 // --- Completion Report Email ---
 export interface FellowSummary {
   name: string;
