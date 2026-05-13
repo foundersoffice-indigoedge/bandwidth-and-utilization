@@ -71,3 +71,25 @@ export function computeResolverForFlag(input: FlagResolverInput): ResolverResult
     resolverName: null,
   };
 }
+
+export interface Recipients {
+  to: string;
+  cc: string[];
+}
+
+/**
+ * Dedupe by email (case-insensitive). TO takes priority — any CC that matches TO is dropped.
+ * CC order is preserved on first occurrence.
+ */
+export function dedupeRecipients(r: Recipients): Recipients {
+  const toLower = r.to.toLowerCase();
+  const seen = new Set<string>([toLower]);
+  const cc: string[] = [];
+  for (const addr of r.cc) {
+    const lc = addr.toLowerCase();
+    if (seen.has(lc)) continue;
+    seen.add(lc);
+    cc.push(addr);
+  }
+  return { to: r.to, cc };
+}

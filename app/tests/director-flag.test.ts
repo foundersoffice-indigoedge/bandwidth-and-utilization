@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeResolverForFlag, type FlagResolverInput } from '../src/lib/director-flag';
+import { computeResolverForFlag, type FlagResolverInput, dedupeRecipients } from '../src/lib/director-flag';
 
 const fellow = (id: string, designation: string, email = `${id}@indigoedge.com`, name = id) => ({
   recordId: id, designation, email, name,
@@ -82,5 +82,37 @@ describe('computeResolverForFlag', () => {
     const r = computeResolverForFlag(input);
     expect(r.resolverEmail).toBe('ajder@indigoedge.com');
     expect(r.resolverFellowId).toBeNull();
+  });
+});
+
+describe('dedupeRecipients', () => {
+  it('keeps TO, drops CC duplicates (case-insensitive)', () => {
+    const r = dedupeRecipients({
+      to: 'VP@indigoedge.com',
+      cc: ['ajder@indigoedge.com', 'vp@INDIGOEDGE.com', 'pai@indigoedge.com'],
+    });
+    expect(r.to).toBe('VP@indigoedge.com');
+    expect(r.cc).toEqual(['ajder@indigoedge.com', 'pai@indigoedge.com']);
+  });
+
+  it('dedupes within CC', () => {
+    const r = dedupeRecipients({
+      to: 'vp@indigoedge.com',
+      cc: ['ajder@indigoedge.com', 'AJDER@indigoedge.com', 'pai@indigoedge.com'],
+    });
+    expect(r.cc).toEqual(['ajder@indigoedge.com', 'pai@indigoedge.com']);
+  });
+
+  it('handles empty CC', () => {
+    const r = dedupeRecipients({ to: 'vp@indigoedge.com', cc: [] });
+    expect(r.cc).toEqual([]);
+  });
+
+  it('preserves CC order after dedupe', () => {
+    const r = dedupeRecipients({
+      to: 'x@a.com',
+      cc: ['c@a.com', 'b@a.com', 'a@a.com', 'B@a.com'],
+    });
+    expect(r.cc).toEqual(['c@a.com', 'b@a.com', 'a@a.com']);
   });
 });
