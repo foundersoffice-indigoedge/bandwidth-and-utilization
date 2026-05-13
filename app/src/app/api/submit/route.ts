@@ -9,6 +9,7 @@ import { postRemark } from '@/lib/slack';
 import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
+import { createSignoffIfReady } from '@/lib/signoff';
 
 interface EntryPayload {
   projectRecordId: string;
@@ -246,6 +247,17 @@ export async function POST(req: NextRequest) {
   // Post remarks to Slack
   if (remarksText) {
     await postRemark(tokenRecord.fellowName, remarksText);
+  }
+
+  // Trigger signoff check for any director whose slice may now be complete
+  const uniqueProjectIds = new Set(savedSubmissions.map(s => s.projectRecordId).filter((id): id is string => id != null));
+  for (const projectId of uniqueProjectIds) {
+    const project = projectMap.get(projectId);
+    if (project) {
+      for (const directorId of project.directorIds) {
+        await createSignoffIfReady(tokenRecord.cycleId, directorId);
+      }
+    }
   }
 
   // Check if cycle is now complete
