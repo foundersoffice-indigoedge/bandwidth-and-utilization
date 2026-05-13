@@ -139,6 +139,15 @@ export async function createSignoffIfReady(
   cycleId: string,
   directorFellowId: string
 ): Promise<{ created: boolean; reason?: string }> {
+  // Feature-flag gate: skip cycles older than SIGNOFF_ENABLED_FROM (YYYY-MM-DD)
+  const enabledFrom = process.env.SIGNOFF_ENABLED_FROM;
+  if (enabledFrom) {
+    const [cycleRow] = await db.select({ startDate: cycles.startDate }).from(cycles).where(eq(cycles.id, cycleId)).limit(1);
+    if (cycleRow && cycleRow.startDate < enabledFrom) {
+      return { created: false, reason: 'feature gated for this cycle' };
+    }
+  }
+
   // Bail early if signoff already exists
   const existing = await db
     .select({ id: directorSignoffs.id })
