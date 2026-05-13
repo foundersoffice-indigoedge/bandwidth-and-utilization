@@ -3,9 +3,8 @@ import { directorSignoffs, tokens as tokensTable, submissions as submissionsTabl
 import { eq, and } from 'drizzle-orm';
 import { fetchAllProjects } from './airtable/projects';
 import { fetchEligibleFellows } from './airtable/fellows';
-import { sendDirectorSignoffEmail } from './email';
+import { sendDirectorSignoffEmail, sendDirectorFlagResolutionEmail } from './email';
 import { computeResolverForFlag, dedupeRecipients } from './director-flag';
-import { sendDirectorFlagResolutionEmail } from './email';
 import { postDirectorFlagToSlack } from './slack';
 import { formatDateRange } from './schedule';
 import { randomUUID } from 'crypto';
