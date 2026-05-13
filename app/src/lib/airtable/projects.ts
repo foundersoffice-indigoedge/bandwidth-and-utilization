@@ -3,6 +3,22 @@ import { TABLE_CONFIG } from './config';
 import { fetchEligibleFellows } from './fellows';
 import type { ProjectType, ProjectAssignment } from '@/types';
 
+/** Extract director record ids from an Airtable project row. Returns [] for VP-led mandates. */
+export function extractDirectorIds(
+  type: ProjectType,
+  fields: Record<string, unknown>,
+  isVpRun: boolean
+): string[] {
+  if (type === 'mandate' && isVpRun) return [];
+  const cfg = TABLE_CONFIG[type];
+  const ids: string[] = [];
+  for (const fieldName of cfg.directorFields) {
+    const raw = fields[fieldName];
+    if (Array.isArray(raw)) ids.push(...(raw as string[]));
+  }
+  return ids;
+}
+
 export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
   const types: ProjectType[] = ['mandate', 'dde', 'pitch'];
 
@@ -40,6 +56,8 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
             }
           }
 
+          const directorIds = extractDirectorIds(type, r.fields, isVpRun === true);
+
           return {
             projectRecordId: r.id,
             projectName: r.fields[cfg.nameField] as string,
@@ -47,6 +65,7 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
             stage: (r.fields[cfg.stageField] as string) || '',
             vpAvpIds,
             associateIds,
+            directorIds,
             isVpRun,
             leadFellowRecordId,
           };

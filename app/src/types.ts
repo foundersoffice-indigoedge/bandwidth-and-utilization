@@ -20,6 +20,7 @@ export interface ProjectAssignment {
   stage: string;
   vpAvpIds: string[];
   associateIds: string[];
+  directorIds: string[];     // Airtable record ids of directors. Empty array for VP-led mandates.
   isVpRun?: boolean;
   leadFellowRecordId?: string;
   leadFellowName?: string;
