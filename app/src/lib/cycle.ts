@@ -76,11 +76,19 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
   // Third gate: every director who has ≥1 in-scope project this cycle must have
   // a director_signoffs row in a terminal state (confirmed or flagged_resolved).
   // A project is "in scope" if it has ≥1 team member (matches getDirectorSliceStatus).
-  const allProjects = await fetchAllProjects();
+  // Only include directors resolvable via fetchEligibleFellows — ex-employees whose
+  // Airtable record id still appears on a project would block the gate forever otherwise.
+  const [allProjects, eligibleFellows] = await Promise.all([
+    fetchAllProjects(),
+    fetchEligibleFellows(),
+  ]);
+  const eligibleIds = new Set(eligibleFellows.map(f => f.recordId));
   const expectedDirectorIds = new Set<string>();
   for (const p of allProjects) {
     if (p.vpAvpIds.length + p.associateIds.length === 0) continue;
-    for (const dirId of p.directorIds) expectedDirectorIds.add(dirId);
+    for (const dirId of p.directorIds) {
+      if (eligibleIds.has(dirId)) expectedDirectorIds.add(dirId);
+    }
   }
 
   const cycleSignoffs = await db
