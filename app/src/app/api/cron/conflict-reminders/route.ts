@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { cycles, conflicts, submissions, conflictRemindersSent } from '@/lib/db/schema';
-import { eq, and, desc, isNotNull } from 'drizzle-orm';
-import { sendConflictReminderEmail } from '@/lib/email';
+import { cycles, conflicts, submissions, conflictRemindersSent, directorSignoffs } from '@/lib/db/schema';
+import { eq, and, desc, isNotNull, isNull, lt, or } from 'drizzle-orm';
+import { sendConflictReminderEmail, sendDirectorSignoffReminderEmail } from '@/lib/email';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -59,52 +59,141 @@ export async function GET(req: NextRequest) {
   for (const conflict of pendingConflicts) {
     if (isSameIstDay(conflict.lastReminderSentAt, now)) continue;
 
-    // submission-source conflicts always have vpSubmissionId / associateSubmissionId set
-    if (!conflict.vpSubmissionId || !conflict.associateSubmissionId) continue;
-    const [vpSub] = await db
-      .select()
-      .from(submissions)
-      .where(eq(submissions.id, conflict.vpSubmissionId))
-      .limit(1);
-    const [assocSub] = await db
-      .select()
-      .from(submissions)
-      .where(eq(submissions.id, conflict.associateSubmissionId))
-      .limit(1);
-    if (!vpSub || !assocSub) continue;
+    if (conflict.source === 'director_flag') {
+      // director_flag conflicts: resolver is stored on the row directly (no VP-lookup needed)
+      if (!conflict.resolverEmail) continue;
 
-    const vpFellow = fellowMap.get(vpSub.fellowRecordId);
-    const assocFellow = fellowMap.get(assocSub.fellowRecordId);
-    if (!vpFellow || !assocFellow) continue;
+      const resolverFellow = conflict.resolverFellowId ? fellowMap.get(conflict.resolverFellowId) : undefined;
+      const resolverName = resolverFellow?.name ?? conflict.resolverEmail;
 
-    try {
-      const msgId = await sendConflictReminderEmail(
-        vpFellow.name,
-        vpFellow.email,
-        assocFellow.name,
-        assocFellow.email,
-        vpSub.projectName,
-        conflict.vpHoursPerDay!,
-        conflict.associateHoursPerDay!,
-        conflict.resolutionToken!,
-        conflict.emailMessageId!,
-      );
+      // Fetch the flagged submission for project name
+      let projectName = conflict.projectRecordId;
+      if (conflict.flaggedSubmissionId) {
+        const [flaggedSub] = await db
+          .select()
+          .from(submissions)
+          .where(eq(submissions.id, conflict.flaggedSubmissionId))
+          .limit(1);
+        if (flaggedSub) projectName = flaggedSub.projectName;
+      }
 
-      await db.insert(conflictRemindersSent).values({
-        conflictId: conflict.id,
-        resendMessageId: msgId ?? null,
-      });
-      await db
-        .update(conflicts)
-        .set({ lastReminderSentAt: now })
-        .where(eq(conflicts.id, conflict.id));
+      try {
+        const msgId = await sendConflictReminderEmail(
+          resolverName,
+          conflict.resolverEmail,
+          '',
+          conflict.resolverEmail,
+          projectName,
+          conflict.proposedHoursPerDay ?? 0,
+          conflict.flaggedOriginalHoursPerDay ?? 0,
+          conflict.resolutionToken!,
+          conflict.emailMessageId!,
+        );
 
-      sent++;
-      await sleep(500);
-    } catch (err) {
-      console.error(`Failed to send reminder for conflict ${conflict.id}:`, err);
+        await db.insert(conflictRemindersSent).values({
+          conflictId: conflict.id,
+          resendMessageId: msgId ?? null,
+        });
+        await db
+          .update(conflicts)
+          .set({ lastReminderSentAt: now })
+          .where(eq(conflicts.id, conflict.id));
+
+        sent++;
+        await sleep(500);
+      } catch (err) {
+        console.error(`Failed to send director_flag reminder for conflict ${conflict.id}:`, err);
+      }
+    } else {
+      // submission-source conflicts: look up VP and associate fellows
+      if (!conflict.vpSubmissionId || !conflict.associateSubmissionId) continue;
+      const [vpSub] = await db
+        .select()
+        .from(submissions)
+        .where(eq(submissions.id, conflict.vpSubmissionId))
+        .limit(1);
+      const [assocSub] = await db
+        .select()
+        .from(submissions)
+        .where(eq(submissions.id, conflict.associateSubmissionId))
+        .limit(1);
+      if (!vpSub || !assocSub) continue;
+
+      const vpFellow = fellowMap.get(vpSub.fellowRecordId);
+      const assocFellow = fellowMap.get(assocSub.fellowRecordId);
+      if (!vpFellow || !assocFellow) continue;
+
+      try {
+        const msgId = await sendConflictReminderEmail(
+          vpFellow.name,
+          vpFellow.email,
+          assocFellow.name,
+          assocFellow.email,
+          vpSub.projectName,
+          conflict.vpHoursPerDay!,
+          conflict.associateHoursPerDay!,
+          conflict.resolutionToken!,
+          conflict.emailMessageId!,
+        );
+
+        await db.insert(conflictRemindersSent).values({
+          conflictId: conflict.id,
+          resendMessageId: msgId ?? null,
+        });
+        await db
+          .update(conflicts)
+          .set({ lastReminderSentAt: now })
+          .where(eq(conflicts.id, conflict.id));
+
+        sent++;
+        await sleep(500);
+      } catch (err) {
+        console.error(`Failed to send reminder for conflict ${conflict.id}:`, err);
+      }
     }
   }
 
-  return NextResponse.json({ message: `Sent ${sent} conflict reminder(s)`, total: pendingConflicts.length });
+  // Signoff reminders — daily nudge for open signoffs (status='email_sent', no reminder yet or >24h ago)
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const openSignoffs = await db
+    .select()
+    .from(directorSignoffs)
+    .where(
+      and(
+        eq(directorSignoffs.status, 'email_sent'),
+        or(
+          isNull(directorSignoffs.lastReminderSentAt),
+          lt(directorSignoffs.lastReminderSentAt, twentyFourHoursAgo),
+        ),
+      ),
+    );
+
+  let signoffsSent = 0;
+  for (const s of openSignoffs) {
+    try {
+      const [cycle] = await db.select().from(cycles).where(eq(cycles.id, s.cycleId)).limit(1);
+      if (!cycle) continue;
+      await sendDirectorSignoffReminderEmail({
+        directorName: s.directorName,
+        directorEmail: s.directorEmail,
+        cycleStartDate: cycle.startDate,
+        signoffToken: s.signoffToken,
+        originalMessageId: s.emailMessageId,
+      });
+      await db
+        .update(directorSignoffs)
+        .set({ lastReminderSentAt: new Date(), updatedAt: new Date() })
+        .where(eq(directorSignoffs.id, s.id));
+      signoffsSent++;
+      await sleep(500);
+    } catch (err) {
+      console.error(`Signoff reminder failed for ${s.id}:`, err);
+    }
+  }
+
+  return NextResponse.json({
+    message: `Sent ${sent} conflict reminder(s), ${signoffsSent} signoff reminder(s)`,
+    totalConflicts: pendingConflicts.length,
+    totalSignoffs: openSignoffs.length,
+  });
 }
