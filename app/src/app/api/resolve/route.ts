@@ -6,7 +6,8 @@ import { scoreHours, WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { sendConflictResolutionEmail, sendDirectorFlagResolutionConfirmationEmail } from '@/lib/email';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
-import { transitionToFlaggedResolved } from '@/lib/signoff';
+import { fetchAllProjects } from '@/lib/airtable/projects';
+import { transitionToFlaggedResolved, createSignoffIfReady } from '@/lib/signoff';
 import { dedupeRecipients } from '@/lib/director-flag';
 import type { ConflictResolution, ProjectType } from '@/types';
 
@@ -232,6 +233,15 @@ export async function POST(req: NextRequest) {
     }
   } catch {
     // Don't block resolution if the email fails
+  }
+
+  // Trigger signoff check for any director whose slice may now be complete
+  const resolveProjects = await fetchAllProjects();
+  const resolveProject = resolveProjects.find(p => p.projectRecordId === conflict.projectRecordId);
+  if (resolveProject) {
+    for (const directorId of resolveProject.directorIds) {
+      await createSignoffIfReady(conflict.cycleId, directorId);
+    }
   }
 
   // Check if cycle is now complete
