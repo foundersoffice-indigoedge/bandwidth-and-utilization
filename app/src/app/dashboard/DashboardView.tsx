@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { SnapshotData, LiveCycleData, LiveFellowData } from './page';
+import type { SnapshotData, LiveCycleData, LiveFellowData, SignoffPanelRow } from './page';
 import type { ProjectBreakdownItem } from '@/types';
 import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 import { getCycleEndDate } from '@/lib/schedule';
@@ -495,6 +495,48 @@ function DrillDown({
   );
 }
 
+// --- Director Sign-offs Panel ---
+
+function signoffStatusLabel(s: string): string {
+  switch (s) {
+    case 'awaiting_slice':   return '⏳ Slice not complete yet';
+    case 'email_sent':       return '📧 Email sent — awaiting director';
+    case 'confirmed':        return '✅ Confirmed';
+    case 'flagged':          return '🚩 Flagged — resolution pending';
+    case 'flagged_resolved': return '✅ Flagged & resolved';
+    default:                 return s;
+  }
+}
+
+function DirectorSignoffsPanel({ rows }: { rows: SignoffPanelRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="mt-8">
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">Director Sign-offs</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse border border-gray-200">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="border border-gray-200 p-2 text-left">Director</th>
+              <th className="border border-gray-200 p-2 text-left">Status</th>
+              <th className="border border-gray-200 p-2 text-right">Projects</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.directorName} className={i % 2 === 0 ? '' : 'bg-gray-50/50'}>
+                <td className="border border-gray-200 p-2">{r.directorName}</td>
+                <td className="border border-gray-200 p-2">{signoffStatusLabel(r.status)}</td>
+                <td className="border border-gray-200 p-2 text-right">{r.projectCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 // --- Live Cycle Section ---
 
 function formatDateRange(startDate: string): string {
@@ -638,6 +680,7 @@ function LiveCycleSection({
         </details>
       )}
 
+      <DirectorSignoffsPanel rows={liveCycle.signoffPanelRows} />
     </div>
   );
 }

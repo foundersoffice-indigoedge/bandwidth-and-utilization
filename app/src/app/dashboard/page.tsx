@@ -6,6 +6,7 @@ import { calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
 import { fetchAllProjects } from '@/lib/airtable/projects';
+import { fetchDirectors } from '@/lib/airtable/fellows';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +44,12 @@ export interface LiveFellowData {
 
 type LiveFellowResult = LiveFellowData | null;
 
+export interface SignoffPanelRow {
+  directorName: string;
+  projectCount: number;
+  status: string;
+}
+
 export interface LiveCycleData {
   cycleId: string;
   startDate: string;
@@ -50,6 +57,40 @@ export interface LiveCycleData {
   submittedFellows: LiveFellowData[];
   pendingFellows: { name: string; designation: string }[];
   pendingConflicts: number;
+  signoffPanelRows: SignoffPanelRow[];
+}
+
+type DirectorSignoffRow = typeof directorSignoffs.$inferSelect;
+type DirectorRecord = { recordId: string; name: string };
+type ProjectRow = import('@/types').ProjectAssignment;
+
+function buildSignoffPanelRows(
+  allProjects: ProjectRow[],
+  cycleSignoffs: DirectorSignoffRow[],
+  directors: DirectorRecord[],
+): SignoffPanelRow[] {
+  // Team-based scope: only projects with at least one VP/AVP or associate assigned
+  const directorScope = new Map<string, number>();
+  for (const p of allProjects) {
+    if (p.vpAvpIds.length + p.associateIds.length === 0) continue;
+    for (const dirId of p.directorIds) {
+      directorScope.set(dirId, (directorScope.get(dirId) ?? 0) + 1);
+    }
+  }
+
+  if (directorScope.size === 0) return [];
+
+  const signoffByDirector = new Map(cycleSignoffs.map(s => [s.directorFellowId, s]));
+  const directorNameMap = new Map(directors.map(d => [d.recordId, d.name]));
+
+  return [...directorScope.entries()].map(([directorId, projectCount]) => {
+    const signoff = signoffByDirector.get(directorId);
+    return {
+      directorName: directorNameMap.get(directorId) ?? 'Unknown',
+      projectCount,
+      status: signoff?.status ?? 'awaiting_slice',
+    };
+  });
 }
 
 async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
@@ -61,11 +102,14 @@ async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
     .limit(1);
   if (!latest) return null;
 
-  const [cycleSnaps, cycleSubs] = await Promise.all([
+  const [cycleSnaps, cycleSubs, cycleSignoffs, allProjects, directors] = await Promise.all([
     db.select().from(snapshots).where(eq(snapshots.cycleId, latest.id)),
     db.select().from(submissions).where(
       and(eq(submissions.cycleId, latest.id), eq(submissions.isSelfReport, true))
     ),
+    db.select().from(directorSignoffs).where(eq(directorSignoffs.cycleId, latest.id)),
+    fetchAllProjects(),
+    fetchDirectors(),
   ]);
   if (cycleSnaps.length === 0) return null;
 
@@ -88,6 +132,8 @@ async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
     remarks: remarksByFellow.get(s.fellowRecordId) ?? null,
   }));
 
+  const signoffPanelRows = buildSignoffPanelRows(allProjects, cycleSignoffs, directors);
+
   return {
     cycleId: latest.id,
     startDate: latest.startDate,
@@ -95,6 +141,7 @@ async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
     submittedFellows,
     pendingFellows: [],
     pendingConflicts: 0,
+    signoffPanelRows,
   };
 }
 
@@ -108,7 +155,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
 
   if (!activeCycle) return null;
 
-  const [allTokens, allSubs, allConflicts, allCycleSignoffs, allProjects] = await Promise.all([
+  const [allTokens, allSubs, allConflicts, allCycleSignoffs, allProjects, directors] = await Promise.all([
     db.select().from(tokens).where(eq(tokens.cycleId, activeCycle.id)),
     db.select().from(submissions).where(
       and(eq(submissions.cycleId, activeCycle.id), eq(submissions.isSelfReport, true))
@@ -116,6 +163,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
     db.select().from(conflicts).where(eq(conflicts.cycleId, activeCycle.id)),
     db.select().from(directorSignoffs).where(eq(directorSignoffs.cycleId, activeCycle.id)),
     fetchAllProjects(),
+    fetchDirectors(),
   ]);
 
   // Open signoffs = email_sent or flagged — used to compute the awaiting-signoff chip
@@ -141,6 +189,8 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
       }
     }
   }
+
+  const signoffPanelRows = buildSignoffPanelRows(allProjects, allCycleSignoffs, directors);
 
   const submittedTokens = allTokens.filter(t => t.status === 'submitted');
   const pendingTokens = allTokens.filter(t => t.status === 'pending');
@@ -197,6 +247,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
     submittedFellows,
     pendingFellows: pendingTokens.map(t => ({ name: t.fellowName, designation: t.fellowDesignation })),
     pendingConflicts: pendingConflicts.length,
+    signoffPanelRows,
   };
 }
 
