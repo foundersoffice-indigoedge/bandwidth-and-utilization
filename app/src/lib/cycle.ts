@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { cycles, tokens, submissions, conflicts, snapshots } from '@/lib/db/schema';
+import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
@@ -72,6 +72,29 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
     .where(and(eq(conflicts.cycleId, cycleId), eq(conflicts.status, 'pending')));
 
   if (pendingConflicts.length > 0) return;
+
+  // Third gate: every director who has ≥1 in-scope project this cycle must have
+  // a director_signoffs row in a terminal state (confirmed or flagged_resolved).
+  // A project is "in scope" if it has ≥1 team member (matches getDirectorSliceStatus).
+  const allProjects = await fetchAllProjects();
+  const expectedDirectorIds = new Set<string>();
+  for (const p of allProjects) {
+    if (p.vpAvpIds.length + p.associateIds.length === 0) continue;
+    for (const dirId of p.directorIds) expectedDirectorIds.add(dirId);
+  }
+
+  const cycleSignoffs = await db
+    .select()
+    .from(directorSignoffs)
+    .where(eq(directorSignoffs.cycleId, cycleId));
+
+  const terminal = new Set(['confirmed', 'flagged_resolved']);
+  const signoffByDirector = new Map(cycleSignoffs.map(s => [s.directorFellowId, s.status]));
+
+  for (const dirId of expectedDirectorIds) {
+    const s = signoffByDirector.get(dirId);
+    if (!s || !terminal.has(s)) return;
+  }
 
   await finalizeCycle(cycleId);
 }
