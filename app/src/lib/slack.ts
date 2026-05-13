@@ -1,4 +1,4 @@
-async function postToSlack(text: string): Promise<void> {
+export async function postToSlack(text: string): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) return;
 
@@ -30,6 +30,48 @@ export async function postRemark(
   remark: string
 ): Promise<void> {
   await postToSlack(`${fellowName} flagged: ${remark}`);
+}
+
+export interface FlagSlackEntry {
+  projectName: string;
+  projectType: 'mandate' | 'dde' | 'pitch';
+  fellowName: string;
+  fellowDesignation: string;
+  reportedHoursPerDay: number;
+  proposedHoursPerDay: number | null;
+  directorComment: string | null;
+  resolverName: string;
+}
+
+export async function postDirectorFlagToSlack(params: {
+  directorName: string;
+  cycleDateRange: string;
+  flags: FlagSlackEntry[];
+}): Promise<void> {
+  const { directorName, cycleDateRange, flags } = params;
+  if (flags.length === 0) return;
+
+  const lines = flags.map(f => {
+    const typeLabel = f.projectType === 'mandate' ? 'Mandate' : f.projectType === 'dde' ? 'DDE' : 'Pitch';
+    const proposed = f.proposedHoursPerDay !== null
+      ? `${f.proposedHoursPerDay.toFixed(2)} hrs/day`
+      : 'no proposed value';
+    let block =
+      `• *${f.projectName}* (${typeLabel}) — ${f.fellowName} (${f.fellowDesignation})\n` +
+      `    Reported: ${f.reportedHoursPerDay.toFixed(2)} hrs/day\n` +
+      `    Proposed: ${proposed}`;
+    if (f.directorComment) block += `\n    Comment: "${f.directorComment}"`;
+    block += `\n    Resolution email sent to: ${f.resolverName}`;
+    return block;
+  }).join('\n\n');
+
+  const text =
+    `:triangular_flag_on_post: *Director sign-off flag* — ${directorName} — Cycle ${cycleDateRange}\n\n` +
+    `${directorName} flagged ${flags.length} bandwidth claim${flags.length !== 1 ? 's' : ''}:\n\n` +
+    `${lines}\n\n` +
+    `_Sign-off: ${directorName} — flagged (resolution pending)_`;
+
+  await postToSlack(text);
 }
 
 export async function postNewProject(
