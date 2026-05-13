@@ -16,13 +16,14 @@ This is a third gate on cycle finalization, sitting after submissions and (submi
 
 **In scope**
 
-- Mandates, DDEs, Pitches — all three project types. Each table in Airtable has a Director field that points to one or more fellows. For VP-led Mandates (`Is this a VP run mandate? = Yes`), the VP/AVP 1 is treated as the director. For DDEs and Pitches there's no separate VP-led flag — if a VP is leading, they're already in the Director field.
+- Non-VP-led Mandates, DDEs, and Pitches. Each of these tables in Airtable has a Director field. For DDEs and Pitches there's no VP-led flag at all — if a VP is leading, they're already in the Director field. The director (whoever they are by designation) gets the sign-off email.
 - Only established Airtable projects. Pending projects (new ones a fellow flagged this cycle that haven't been created in Airtable yet) are explicitly excluded from director sign-off this cycle; they'll show up in next cycle's sign-off once they're real Airtable records.
 - Daily reminder emails for unresolved sign-offs, threaded into the original email (extending the existing `conflict-reminders` cron).
 - A dashboard indicator on each project that's awaiting director sign-off, alongside the existing per-project "conflict pending" chip.
 
 **Out of scope**
 
+- **VP-led Mandates** (`Is this a VP run mandate? = Yes`). The VP/AVP 1 already runs the mandate end-to-end; there's no separate director to consult. VP-led mandates are auto-approved — bandwidth on them is taken as final the moment all submissions land and submission-level conflicts (if any) resolve. They contribute nothing to any director's slice and aren't gated by sign-off. The dashboard does not show a "awaiting director sign-off" chip on VP-led mandates.
 - Sign-off on pending projects (next cycle's problem).
 - Reopening or revising a sign-off after it's terminal.
 - A bulk admin override to mark a director as confirmed on their behalf (could be added later if it turns out we need it; not building it now).
@@ -30,7 +31,7 @@ This is a third gate on cycle finalization, sitting after submissions and (submi
 
 ## 3. Definitions
 
-- **Director's slice** — the set of bandwidth submissions on projects where this director is the Director (or VP/AVP 1 on a VP-led Mandate), within the current cycle.
+- **Director's slice** — the set of bandwidth submissions on projects where this director is named in the Airtable Director field, within the current cycle. **VP-led Mandates are never in any slice** — they bypass sign-off entirely.
 - **Slice complete** — every fellow with a token on any of those projects has a non-pending token AND every submission-level conflict referencing those projects' submissions is resolved.
 - **Signoff** — a `director_signoffs` row representing one director's response status for one cycle.
 - **Flag** — a director's claim that a specific submission's number is wrong. Each flag becomes one `conflicts` row with `source='director_flag'`.
@@ -141,9 +142,9 @@ The mandate table already has a Director column (per user confirmation). DDE and
 
 `fetchAllProjects()` in `app/src/lib/airtable/projects.ts` is extended to also pull director ids per project, attached to each `ProjectAssignment` as `directorIds: string[]`.
 
-For VP-led Mandates (`Is this a VP run mandate? = Yes`), `directorIds` is set to `[VP/AVP 1's record id]` instead of reading the Director field. Same rule as today's `leadFellowRecordId` derivation.
+**VP-led Mandates are excluded:** if `isVpRun === true` on a Mandate, `directorIds` is set to `[]` (empty array). The Director field on Airtable is not read for those rows. A project with `directorIds = []` is never in any slice and is never gated by sign-off. This is the mechanical implementation of "VP-led mandates are auto-approved" from Section 2.
 
-A project may have multiple directors. The slice-completion check fires per-director, so each director independently gets their own email and either confirms or flags.
+A project may have multiple directors (Airtable Director field can hold multiple linked records). The slice-completion check fires per-director, so each director independently gets their own email and either confirms or flags.
 
 ## 6. State Machine & Cycle Gate
 
@@ -432,6 +433,7 @@ No changes for v1. The monthly view shows aggregated utilization; signoff state 
 
 | Case | Behavior |
 |---|---|
+| VP-led Mandate in the cycle | `directorIds = []`, never enters any slice. Bandwidth on it flows through submissions + conflict resolution as normal. No sign-off email, no gate, no dashboard chip. Auto-approved. |
 | Two directors share a project (Director field has multiple values) | Each gets their own email when their slice completes. Either may flag independently. If one flags and one confirms, the cycle still waits for the flag's child conflicts to resolve. |
 | Director field changes mid-cycle (Airtable updated) | We use whatever the value is at the moment of slice-completion check. If a signoff row already exists for the original director, no new signoff is sent (the new director is silently dropped). Acceptable trade-off — director changes mid-cycle are rare and ambiguous; we don't auto-redirect. |
 | Project moved out of active stage mid-cycle | Already excluded by existing active-stage filtering in `fetchAllProjects`. Won't appear in the slice check. |
