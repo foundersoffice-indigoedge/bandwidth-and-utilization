@@ -261,6 +261,11 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
                         conflict pending
                       </span>
                     )}
+                    {b.awaitingSignoff && (
+                      <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded font-medium" title="Awaiting director sign-off on this project">
+                        awaiting director sign-off
+                      </span>
+                    )}
                     {b.isVpRun && (
                       <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-medium">
                         VP-run{b.leadFellowName ? ` · Led by ${b.leadFellowName}` : ''}
@@ -632,6 +637,7 @@ function LiveCycleSection({
           </div>
         </details>
       )}
+
     </div>
   );
 }

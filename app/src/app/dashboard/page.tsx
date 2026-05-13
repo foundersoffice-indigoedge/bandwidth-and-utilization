@@ -1,10 +1,11 @@
 import { db } from '@/lib/db';
-import { cycles, tokens, submissions, conflicts, snapshots } from '@/lib/db/schema';
-import { and, eq, gte, lte, desc } from 'drizzle-orm';
+import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
+import { and, eq, gte, lte, desc, or } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
 import { calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
+import { fetchAllProjects } from '@/lib/airtable/projects';
 
 export const dynamic = 'force-dynamic';
 
@@ -107,13 +108,20 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
 
   if (!activeCycle) return null;
 
-  const [allTokens, allSubs, allConflicts] = await Promise.all([
+  const [allTokens, allSubs, allConflicts, allCycleSignoffs, allProjects] = await Promise.all([
     db.select().from(tokens).where(eq(tokens.cycleId, activeCycle.id)),
     db.select().from(submissions).where(
       and(eq(submissions.cycleId, activeCycle.id), eq(submissions.isSelfReport, true))
     ),
     db.select().from(conflicts).where(eq(conflicts.cycleId, activeCycle.id)),
+    db.select().from(directorSignoffs).where(eq(directorSignoffs.cycleId, activeCycle.id)),
+    fetchAllProjects(),
   ]);
+
+  // Open signoffs = email_sent or flagged — used to compute the awaiting-signoff chip
+  const openSignoffs = allCycleSignoffs.filter(
+    s => s.status === 'email_sent' || s.status === 'flagged'
+  );
 
   const pendingConflicts = allConflicts.filter(c => c.status === 'pending');
   const conflictProjectIds = new Set(pendingConflicts.map(c => c.projectRecordId));
@@ -122,6 +130,16 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
   for (const c of pendingConflicts) {
     const relatedSubs = allSubs.filter(s => s.projectRecordId === c.projectRecordId);
     for (const s of relatedSubs) conflictFellowIds.add(s.fellowRecordId);
+  }
+
+  // Compute projects with an open director signoff (team-based scope only)
+  const awaitingSignoffProjects = new Set<string>();
+  for (const sig of openSignoffs) {
+    for (const p of allProjects) {
+      if (p.vpAvpIds.length + p.associateIds.length > 0 && p.directorIds.includes(sig.directorFellowId)) {
+        awaitingSignoffProjects.add(p.projectRecordId);
+      }
+    }
   }
 
   const submittedTokens = allTokens.filter(t => t.status === 'submitted');
@@ -152,6 +170,8 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         hasConflict: conflictProjectIds.has(s.projectRecordId),
+        awaitingSignoff: awaitingSignoffProjects.has(s.projectRecordId),
+        projectRecordId: s.projectRecordId,
       }));
 
       const remarks = fellowSubs.find(s => s.remarks && s.remarks.trim().length > 0)?.remarks?.trim() ?? null;

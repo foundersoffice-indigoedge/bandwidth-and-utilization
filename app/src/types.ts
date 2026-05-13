@@ -44,6 +44,8 @@ export interface ProjectBreakdownItem {
   isVpRun?: boolean;
   leadFellowName?: string;
   hasConflict?: boolean;
+  awaitingSignoff?: boolean;
+  projectRecordId?: string;
 }
 
 export interface SignoffLine {
