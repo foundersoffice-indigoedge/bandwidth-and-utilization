@@ -91,7 +91,19 @@ export function buildSignoffGroups(
     const projectSubmissions = submissions.filter(s => s.projectRecordId === p.projectRecordId);
     if (projectSubmissions.length === 0) continue;
 
-    const lines = projectSubmissions.map(s => {
+    // Dedupe by (projectRecordId, fellowRecordId): prefer self-report, fallback to first encountered.
+    const byFellow = new Map<string, SubmissionRow>();
+    for (const s of projectSubmissions) {
+      const existing = byFellow.get(s.fellowRecordId);
+      if (!existing) {
+        byFellow.set(s.fellowRecordId, s);
+      } else if (s.isSelfReport && !existing.isSelfReport) {
+        byFellow.set(s.fellowRecordId, s);
+      }
+      // else: keep existing (first-encountered wins among ties)
+    }
+
+    const lines = Array.from(byFellow.values()).map(s => {
       const f = fellowMap.get(s.fellowRecordId);
       return {
         submissionId: s.id,

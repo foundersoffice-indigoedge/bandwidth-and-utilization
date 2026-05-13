@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getDirectorSliceStatus, createSignoffIfReady, type SliceInput } from '../src/lib/signoff';
+import { getDirectorSliceStatus, createSignoffIfReady, buildSignoffGroups, type SliceInput } from '../src/lib/signoff';
 import type { ProjectAssignment } from '../src/types';
 
 const baseProject = (id: string, overrides: Partial<ProjectAssignment> = {}): ProjectAssignment => ({
@@ -109,6 +109,97 @@ describe('getDirectorSliceStatus', () => {
       conflicts: [],
     };
     expect(getDirectorSliceStatus(input)).toBe('complete');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSignoffGroups — dedupe by (projectRecordId, fellowRecordId)
+// ---------------------------------------------------------------------------
+
+type SubRow = Parameters<typeof buildSignoffGroups>[2][number];
+
+const makeSubmission = (
+  id: string,
+  projectRecordId: string,
+  fellowRecordId: string,
+  hoursPerDay: number,
+  isSelfReport: boolean,
+): SubRow => ({
+  id,
+  cycleId: 'cycle1',
+  fellowRecordId,
+  projectRecordId,
+  projectName: projectRecordId,
+  projectType: 'mandate',
+  hoursValue: hoursPerDay,
+  hoursUnit: 'per_day',
+  hoursPerDay,
+  autoScore: 1,
+  isSelfReport,
+  targetFellowId: null,
+  remarks: null,
+  hoursPerWeek: hoursPerDay * 6,
+});
+
+const directorProject = baseProject('p1', {
+  directorIds: ['recDirector1'],
+  associateIds: ['recA'],
+  vpAvpIds: [],
+});
+
+const fellowsFixture = [
+  { recordId: 'recA', name: 'Alice', designation: 'Associate 2', email: 'alice@example.com' },
+];
+
+describe('buildSignoffGroups — dedupe', () => {
+  it('(a) only self-report exists — uses that row', () => {
+    const subs: SubRow[] = [makeSubmission('sub1', 'p1', 'recA', 2.0, true)];
+    const groups = buildSignoffGroups('recDirector1', [directorProject], subs, fellowsFixture);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].lines).toHaveLength(1);
+    expect(groups[0].lines[0].submissionId).toBe('sub1');
+    expect(groups[0].lines[0].hoursPerDay).toBe(2.0);
+  });
+
+  it('(b) only VP-projection exists — uses that row', () => {
+    const subs: SubRow[] = [makeSubmission('sub2', 'p1', 'recA', 1.5, false)];
+    const groups = buildSignoffGroups('recDirector1', [directorProject], subs, fellowsFixture);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].lines).toHaveLength(1);
+    expect(groups[0].lines[0].submissionId).toBe('sub2');
+    expect(groups[0].lines[0].hoursPerDay).toBe(1.5);
+  });
+
+  it('(c) both self-report and VP-projection exist — self-report wins', () => {
+    const subs: SubRow[] = [
+      makeSubmission('vp-proj', 'p1', 'recA', 1.0, false),   // VP projection first
+      makeSubmission('self-rep', 'p1', 'recA', 2.5, true),   // self-report second
+    ];
+    const groups = buildSignoffGroups('recDirector1', [directorProject], subs, fellowsFixture);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].lines).toHaveLength(1);
+    expect(groups[0].lines[0].submissionId).toBe('self-rep');
+    expect(groups[0].lines[0].hoursPerDay).toBe(2.5);
+  });
+
+  it('(c) both present, self-report first — still only 1 line with self-report value', () => {
+    const subs: SubRow[] = [
+      makeSubmission('self-rep', 'p1', 'recA', 2.5, true),   // self-report first
+      makeSubmission('vp-proj', 'p1', 'recA', 1.0, false),   // VP projection second
+    ];
+    const groups = buildSignoffGroups('recDirector1', [directorProject], subs, fellowsFixture);
+    expect(groups[0].lines).toHaveLength(1);
+    expect(groups[0].lines[0].submissionId).toBe('self-rep');
+  });
+
+  it('(d) multiple self-reports for same fellow (edge case) — takes first encountered', () => {
+    const subs: SubRow[] = [
+      makeSubmission('sr-first', 'p1', 'recA', 3.0, true),
+      makeSubmission('sr-second', 'p1', 'recA', 1.0, true),
+    ];
+    const groups = buildSignoffGroups('recDirector1', [directorProject], subs, fellowsFixture);
+    expect(groups[0].lines).toHaveLength(1);
+    expect(groups[0].lines[0].submissionId).toBe('sr-first');
   });
 });
 
