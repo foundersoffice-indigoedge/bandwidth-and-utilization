@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { fetchEligibleFellows } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
@@ -73,21 +73,22 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
 
   if (pendingConflicts.length > 0) return;
 
-  // Third gate: every director who has ≥1 in-scope project this cycle must have
-  // a director_signoffs row in a terminal state (confirmed or flagged_resolved).
+  // Third gate: every current Director who has ≥1 in-scope project this cycle must
+  // have a director_signoffs row in a terminal state (confirmed or flagged_resolved).
   // A project is "in scope" if it has ≥1 team member (matches getDirectorSliceStatus).
-  // Only include directors resolvable via fetchEligibleFellows — ex-employees whose
-  // Airtable record id still appears on a project would block the gate forever otherwise.
-  const [allProjects, eligibleFellows] = await Promise.all([
+  // Resolve via fetchDirectors so the gate ignores both ex-directors and VPs that
+  // happen to appear in an Airtable project's director field — neither category
+  // produces a sign-off, so neither should block finalization.
+  const [allProjects, currentDirectors] = await Promise.all([
     fetchAllProjects(),
-    fetchEligibleFellows(),
+    fetchDirectors(),
   ]);
-  const eligibleIds = new Set(eligibleFellows.map(f => f.recordId));
+  const currentDirectorIds = new Set(currentDirectors.map(f => f.recordId));
   const expectedDirectorIds = new Set<string>();
   for (const p of allProjects) {
     if (p.vpAvpIds.length + p.associateIds.length === 0) continue;
     for (const dirId of p.directorIds) {
-      if (eligibleIds.has(dirId)) expectedDirectorIds.add(dirId);
+      if (currentDirectorIds.has(dirId)) expectedDirectorIds.add(dirId);
     }
   }
 

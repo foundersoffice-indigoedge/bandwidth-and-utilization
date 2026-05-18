@@ -2,7 +2,7 @@ import { db } from './db/index';
 import { directorSignoffs, tokens as tokensTable, submissions as submissionsTable, conflicts as conflictsTable, cycles } from './db/schema';
 import { eq, and } from 'drizzle-orm';
 import { fetchAllProjects } from './airtable/projects';
-import { fetchEligibleFellows } from './airtable/fellows';
+import { fetchEligibleFellows, fetchDirectors } from './airtable/fellows';
 import { sendDirectorSignoffEmail, sendDirectorFlagResolutionEmail } from './email';
 import { computeResolverForFlag, dedupeRecipients } from './director-flag';
 import { postDirectorFlagToSlack } from './slack';
@@ -185,20 +185,26 @@ export async function createSignoffIfReady(
 
   if (sliceStatus !== 'complete') return { created: false, reason: 'incomplete' };
 
-  // Fetch director profile and cycle
-  const [fellows, cycleRows] = await Promise.all([
+  // Fetch director profile (from Director-designated fellows only) and cycle.
+  // Using fetchDirectors — not fetchEligibleFellows — guarantees we only email actual
+  // current Directors: ex-directors and VPs mis-tagged in Airtable's project director
+  // field are filtered out at source. VP-led mandates and VP-led DDEs therefore produce
+  // no sign-off, even if a VP recordId appears in the project's director field.
+  const [directors, teamFellows, cycleRows] = await Promise.all([
+    fetchDirectors(),
     fetchEligibleFellows(),
     db.select().from(cycles).where(eq(cycles.id, cycleId)).limit(1),
   ]);
 
-  const director = fellows.find(f => f.recordId === directorFellowId);
-  if (!director) return { created: false, reason: 'director not found' };
+  const director = directors.find(f => f.recordId === directorFellowId);
+  if (!director) return { created: false, reason: 'not a current director' };
 
   const cycle = cycleRows[0];
   if (!cycle) return { created: false, reason: 'cycle not found' };
 
-  // Build email groups — if empty, there's nothing to sign off on
-  const groups = buildSignoffGroups(directorFellowId, projects, allSubmissions, fellows);
+  // Build email groups — if empty, there's nothing to sign off on.
+  // teamFellows (VP/AVP/Associate) supplies the display names for sign-off lines.
+  const groups = buildSignoffGroups(directorFellowId, projects, allSubmissions, teamFellows);
   if (groups.length === 0) return { created: false, reason: 'no projects to sign off on' };
 
   const signoffToken = randomUUID();
