@@ -48,7 +48,7 @@ export default async function SubmitPage({
       ),
   ]);
 
-  const fellowProjects = getProjectsForFellow(projects, tokenRecord.fellowRecordId);
+  const fellowProjects = getProjectsForFellow(projects, tokenRecord.fellowRecordId, tokenRecord.fellowDesignation);
   const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
 
   const fellowRecordId = tokenRecord.fellowRecordId;

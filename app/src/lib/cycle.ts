@@ -27,7 +27,7 @@ export async function startCycle(testFellowIds?: string[]): Promise<string> {
   const allProjects = await fetchAllProjects();
 
   for (const fellow of fellows) {
-    const fellowProjects = getProjectsForFellow(allProjects, fellow.recordId);
+    const fellowProjects = getProjectsForFellow(allProjects, fellow.recordId, fellow.designation);
     if (fellowProjects.length === 0) continue;
 
     const tokenValue = crypto.randomUUID();

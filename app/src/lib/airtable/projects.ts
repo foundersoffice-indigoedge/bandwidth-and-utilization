@@ -1,6 +1,6 @@
 import { fetchAllRecords } from './client';
 import { TABLE_CONFIG } from './config';
-import { fetchEligibleFellows } from './fellows';
+import { fetchEligibleFellows, isVpOrAvp } from './fellows';
 import type { ProjectType, ProjectAssignment } from '@/types';
 
 /** Extract director record ids from an Airtable project row. Returns [] for VP-led mandates. */
@@ -89,11 +89,25 @@ export async function fetchAllProjects(): Promise<ProjectAssignment[]> {
   return projects;
 }
 
+/**
+ * Projects a fellow should report bandwidth on. Matches the VP/AVP and Associate
+ * columns, plus the Director column when the fellow is themselves a VP/AVP — a VP/AVP
+ * who *leads* a project sits in the Director slot, and must still be asked for hours.
+ * The designation gate keeps true Directors out of the director branch (they are not
+ * eligible fellows upstream, but this is the explicit guard). `.filter` returns each
+ * project at most once, so a fellow listed in both Director and VP/AVP columns of the
+ * same record is never asked twice.
+ */
 export function getProjectsForFellow(
   projects: ProjectAssignment[],
-  fellowRecordId: string
+  fellowRecordId: string,
+  fellowDesignation: string
 ): ProjectAssignment[] {
+  const leadsFromDirectorSlot = isVpOrAvp(fellowDesignation);
   return projects.filter(
-    p => p.vpAvpIds.includes(fellowRecordId) || p.associateIds.includes(fellowRecordId)
+    p =>
+      p.vpAvpIds.includes(fellowRecordId) ||
+      p.associateIds.includes(fellowRecordId) ||
+      (leadsFromDirectorSlot && p.directorIds.includes(fellowRecordId))
   );
 }
