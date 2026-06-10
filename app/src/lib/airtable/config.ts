@@ -1,3 +1,4 @@
+import { stagesWithBehavior } from 'ie-agent-rules';
 import type { ProjectType } from '@/types';
 
 export const FELLOWS_TABLE_ID = 'tbl2EquvDVwvSaGVy';
@@ -21,15 +22,9 @@ export const TABLE_CONFIG: Record<ProjectType, {
     associateFields: ['Mandate Associate 1', 'Mandate Associate 2'],
     directorFields: ['Mandate Director'],
     isVpRunField: 'Is this a VP run mandate?',
-    activeStages: [
-      'Not Started',
-      'In Production',
-      'In GTM',
-      'In Docs',
-      'Closing',
-      'Term Sheet Signed',
-      'DD Started',
-    ],
+    // Derived from the shared rule (shared.stages.mandate) so Utilization MIS and
+    // ie-checkin can never disagree on which mandate stages are active.
+    activeStages: stagesWithBehavior('shared.stages.mandate', 'active'),
     label: 'Mandates',
   },
   dde: {

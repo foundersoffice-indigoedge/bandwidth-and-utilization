@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // ie-agent-rules ships TypeScript source (no build step); Next must transpile it.
+  transpilePackages: ["ie-agent-rules"],
 };
 
 export default nextConfig;
