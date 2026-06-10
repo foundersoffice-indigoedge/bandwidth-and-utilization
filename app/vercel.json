@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "installCommand": "if [ -n \"$IE_AGENT_RULES_TOKEN\" ]; then git config --global url.\"https://$IE_AGENT_RULES_TOKEN@github.com/\".insteadOf \"git+ssh://git@github.com/\"; else git config --global url.\"https://github.com/\".insteadOf \"git+ssh://git@github.com/\"; fi && pnpm install --frozen-lockfile",
   "crons": [
     {
       "path": "/api/cron/start-cycle",
