@@ -2,10 +2,21 @@ import { Resend } from 'resend';
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { formatDateRange } from '@/lib/schedule';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
+import { getTemplateMap, renderTemplate } from 'ie-agent-rules';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
 const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
+
+// Subjects, type labels, and resolver/action phrasing are governed in the rules
+// store (utilization-mis.template.*). The HTML structure and brand colors below
+// stay in code as presentation.
+const SUBJECTS = getTemplateMap('utilization-mis.template.email-subjects');
+const TYPE_LABELS = getTemplateMap('utilization-mis.template.type-labels');
+const TYPE_LABELS_PLURAL = getTemplateMap('utilization-mis.template.type-labels-plural');
+const RESOLVER_LABELS = getTemplateMap('utilization-mis.template.resolver-labels');
+const FLAG_ACTION_LABELS = getTemplateMap('utilization-mis.template.flag-action-labels');
 
 /** Send an email via Resend, throwing on failure. Returns the Resend message ID. */
 async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<string | undefined> {
@@ -30,9 +41,9 @@ function standardCc(): string[] {
 }
 
 const TYPE_ORDER: { type: ProjectType; label: string; color: string; bg: string }[] = [
-  { type: 'mandate', label: 'Mandates', color: '#1e40af', bg: '#dbeafe' },
-  { type: 'dde', label: 'DDEs', color: '#0f766e', bg: '#ccfbf1' },
-  { type: 'pitch', label: 'Pitches', color: '#7c3aed', bg: '#ede9fe' },
+  { type: 'mandate', label: TYPE_LABELS_PLURAL.mandate, color: '#1e40af', bg: '#dbeafe' },
+  { type: 'dde', label: TYPE_LABELS_PLURAL.dde, color: '#0f766e', bg: '#ccfbf1' },
+  { type: 'pitch', label: TYPE_LABELS_PLURAL.pitch, color: '#7c3aed', bg: '#ede9fe' },
 ];
 
 function buildGroupedProjectsHtml(projects: ProjectAssignment[]): string {
@@ -88,7 +99,7 @@ export async function sendCollectionEmail(
   await sendEmail({
     from,
     to: overrideTo(fellow.email),
-    subject: `Bandwidth Update — ${dateRange}`,
+    subject: renderTemplate(SUBJECTS.collection, { dateRange }),
     html: `
       <p>Hi ${fellow.name},</p>
       <p>Please submit your bandwidth update for the current cycle (${dateRange}).</p>
@@ -110,7 +121,7 @@ export async function sendReminderEmail(
   await sendEmail({
     from,
     to: overrideTo(fellow.email),
-    subject: 'Reminder: Bandwidth Update Pending',
+    subject: SUBJECTS.reminder,
     html: `
       <p>Hi ${fellow.name},</p>
       <p>Your bandwidth update for ${dateRange} is still pending. Please submit it at your earliest convenience.</p>
@@ -136,7 +147,7 @@ export async function sendConflictEmail(
     from,
     to: overrideTo(vpEmail),
     cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
-    subject: `Bandwidth Conflict — ${projectName}`,
+    subject: renderTemplate(SUBJECTS.conflict, { projectName }),
     html: `
       <p>Hi ${vpName},</p>
       <p>On <strong>${projectName}</strong>, you reported ${associateName} will spend <strong>${vpHours} hrs/day</strong>, but ${associateName} reported <strong>${associateHours} hrs/day</strong>.</p>
@@ -162,9 +173,9 @@ export async function sendConflictResolutionEmail(
   originalMessageId?: string | null,
 ) {
   let resolverLabel: string;
-  if (resolvedBy === 'associate_number') resolverLabel = `${associateName}'s number`;
-  else if (resolvedBy === 'vp_number') resolverLabel = `${vpName}'s number`;
-  else resolverLabel = 'a custom number';
+  if (resolvedBy === 'associate_number') resolverLabel = renderTemplate(RESOLVER_LABELS['associate_number'], { associateName });
+  else if (resolvedBy === 'vp_number') resolverLabel = renderTemplate(RESOLVER_LABELS['vp_number'], { vpName });
+  else resolverLabel = RESOLVER_LABELS['custom'];
 
   const headers: Record<string, string> = {};
   if (originalMessageId) {
@@ -176,7 +187,7 @@ export async function sendConflictResolutionEmail(
     from,
     to: overrideTo(vpEmail),
     cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
-    subject: `Re: Bandwidth Conflict — ${projectName}`,
+    subject: renderTemplate(SUBJECTS['conflict-resolution'], { projectName }),
     headers,
     html: `
       <div style="background:#f0fdf4;padding:16px 20px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
@@ -206,7 +217,7 @@ export async function sendConflictReminderEmail(
     from,
     to: overrideTo(vpEmail),
     cc: overrideCc([associateEmail, process.env.ADMIN_EMAIL!, process.env.CC_EMAIL!].filter(Boolean)),
-    subject: `Reminder: Bandwidth Conflict — ${projectName}`,
+    subject: renderTemplate(SUBJECTS['conflict-reminder'], { projectName }),
     headers: {
       'In-Reply-To': originalMessageId,
       'References': originalMessageId,
@@ -242,7 +253,7 @@ export async function sendDirectorSignoffEmail(params: {
   const projectCount = groups.length;
 
   const groupsHtml = groups.map(g => {
-    const typeLabel = g.projectType === 'mandate' ? 'Mandate' : g.projectType === 'dde' ? 'DDE' : 'Pitch';
+    const typeLabel = TYPE_LABELS[g.projectType];
     const rows = g.lines.map((l, i) => {
       const bg = i % 2 === 0 ? '#ffffff' : '#f9fafb';
       return `<tr style="background:${bg}">
@@ -270,7 +281,7 @@ export async function sendDirectorSignoffEmail(params: {
     from,
     to: overrideTo(directorEmail),
     cc: standardCc(),
-    subject: `Bandwidth Sign-off — ${dateRange} — ${projectCount} project${projectCount !== 1 ? 's' : ''}`,
+    subject: renderTemplate(SUBJECTS.signoff, { dateRange, projectCount, projectNoun: `project${projectCount !== 1 ? 's' : ''}` }),
     html: `
       <p>Hi ${directorName},</p>
       <p>Your team has finished reporting bandwidth on the projects you direct for the cycle of <strong>${dateRange}</strong>. Please review the summary below and either confirm everything looks right or flag specific lines you think need a second look.</p>
@@ -306,7 +317,7 @@ export async function sendDirectorSignoffReminderEmail(params: {
   return await sendEmail({
     from,
     to: overrideTo(directorEmail),
-    subject: `Re: Bandwidth Sign-off — ${dateRange}`,
+    subject: renderTemplate(SUBJECTS['signoff-reminder'], { dateRange }),
     headers,
     html: `
       <p>Hi ${directorName},</p>
@@ -336,7 +347,7 @@ export async function sendDirectorFlagResolutionEmail(params: {
   const { resolverName, resolverEmail, ccEmails, directorName, fellowName, fellowDesignation,
           projectName, projectType, originalHoursPerDay, proposedHoursPerDay, directorComment,
           resolutionToken } = params;
-  const typeLabel = projectType === 'mandate' ? 'Mandate' : projectType === 'dde' ? 'DDE' : 'Pitch';
+  const typeLabel = TYPE_LABELS[projectType];
   const appUrl = process.env.APP_URL || '';
   const originalHrsPerWeek = (originalHoursPerDay * WORKING_DAYS_PER_WEEK).toFixed(1);
   const proposedHrsPerWeek = proposedHoursPerDay !== null ? (proposedHoursPerDay * WORKING_DAYS_PER_WEEK).toFixed(1) : null;
@@ -359,7 +370,7 @@ export async function sendDirectorFlagResolutionEmail(params: {
     from,
     to: overrideTo(resolverEmail),
     cc: overrideCc(ccEmails),
-    subject: `Bandwidth Sign-off Flag — ${projectName} — ${fellowName}`,
+    subject: renderTemplate(SUBJECTS.flag, { projectName, fellowName }),
     html: `
       <p>Hi ${resolverName},</p>
       <p><strong>${directorName}</strong> flagged <strong>${fellowName}</strong>'s (${fellowDesignation}) bandwidth on <strong>${projectName}</strong> (${typeLabel}) this cycle.</p>
@@ -387,9 +398,9 @@ export async function sendDirectorFlagResolutionConfirmationEmail(params: {
 }): Promise<string | undefined> {
   const { resolverEmail, ccEmails, fellowName, projectName, finalHoursPerDay, action, originalMessageId } = params;
   const actionLabel =
-    action === 'keep_original' ? 'kept the original value' :
-    action === 'use_proposed' ? 'used the director\'s proposed value' :
-    'set a custom value';
+    action === 'keep_original' ? FLAG_ACTION_LABELS['keep_original'] :
+    action === 'use_proposed' ? FLAG_ACTION_LABELS['use_proposed'] :
+    FLAG_ACTION_LABELS['custom'];
   const headers: Record<string, string> = {};
   if (originalMessageId) {
     headers['In-Reply-To'] = originalMessageId;
@@ -400,7 +411,7 @@ export async function sendDirectorFlagResolutionConfirmationEmail(params: {
     from,
     to: overrideTo(resolverEmail),
     cc: overrideCc(ccEmails),
-    subject: `Re: Bandwidth Sign-off Flag — ${projectName} — ${fellowName}`,
+    subject: renderTemplate(SUBJECTS['flag-confirmation'], { projectName, fellowName }),
     headers,
     html: `
       <p>Resolved: <strong>${finalHoursPerDay.toFixed(2)} hrs/day</strong>.</p>
@@ -445,7 +456,7 @@ export async function sendCompletionEmail(
       return `<tr style="background:${rowBg}">
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500">${f.name}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">${f.designation}</td>
-        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${hpw} / 84</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${hpw} / ${WEEKLY_CAPACITY_HOURS}</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;text-align:center">${pct}%</td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center"><span style="background:${tagColors.bg};color:${tagColors.text};padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">${f.loadTag}</span></td>
         <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">${f.projectCount}</td>
@@ -473,7 +484,7 @@ export async function sendCompletionEmail(
     from,
     to: overrideTo(process.env.ADMIN_EMAIL!),
     cc: standardCc(),
-    subject: `Bandwidth Cycle ${dateRange} — Complete`,
+    subject: renderTemplate(SUBJECTS.completion, { dateRange }),
     html: `
       <p style="font-size:16px;font-weight:600;margin-bottom:4px">Cycle Complete: ${dateRange}</p>
       <div style="background:#f0fdf4;padding:12px 16px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">

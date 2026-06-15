@@ -7,9 +7,13 @@ import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 import { getCycleEndDate } from '@/lib/schedule';
 import { getLoadTag, WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { getStringList, getTemplateMap } from 'ie-agent-rules';
 import { FellowProjectTab } from './FellowProjectTab';
 
-const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+// Month labels and type-label words are governed (utilization-mis.*); the
+// tailwind colors below stay in code as presentation.
+const MONTHS = getStringList('utilization-mis.vocab.iy-months');
+const TYPE_LABEL_WORDS = getTemplateMap('utilization-mis.template.type-labels');
 
 function getLoadColor(tag: string): string {
   switch (tag) {
@@ -28,9 +32,9 @@ function getLoadColor(tag: string): string {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  mandate: { label: 'Mandate', color: 'text-blue-700' },
-  dde: { label: 'DDE', color: 'text-teal-700' },
-  pitch: { label: 'Pitch', color: 'text-violet-700' },
+  mandate: { label: TYPE_LABEL_WORDS.mandate, color: 'text-blue-700' },
+  dde: { label: TYPE_LABEL_WORDS.dde, color: 'text-teal-700' },
+  pitch: { label: TYPE_LABEL_WORDS.pitch, color: 'text-violet-700' },
 };
 
 /** Sort order: VP first, then AVP, Associate 3, 2, 1, Analyst. Alphabetical within each tier. */
