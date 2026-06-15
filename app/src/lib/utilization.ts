@@ -1,15 +1,19 @@
+import { getNumber, loadTagFromBands } from 'ie-agent-rules';
 import type { LoadTag } from '@/types';
 
-export const WEEKLY_CAPACITY_HOURS = 84;
+// Weekly capacity and the load-tag bands are governed rules
+// (utilization-mis.calc.*). loadTagFromBands reproduces the old thresholds
+// exactly, including the final <= band.
+export const WEEKLY_CAPACITY_HOURS = getNumber('utilization-mis.calc.weekly-capacity-hours');
+
+// Investment-year start month (0-based; 6 = July). A date in this month or later
+// belongs to the next IY. Governed so every IY boundary check uses one source.
+export const INVESTMENT_YEAR_START_MONTH = getNumber('utilization-mis.calc.investment-year-start-month');
 
 export function calculateHoursUtilization(totalHoursPerWeek: number): number {
   return totalHoursPerWeek / WEEKLY_CAPACITY_HOURS;
 }
 
 export function getLoadTag(utilization: number): LoadTag {
-  if (utilization < 0.30) return 'Free';
-  if (utilization < 0.60) return 'Comfortable';
-  if (utilization < 0.85) return 'Busy';
-  if (utilization <= 1.00) return 'At Capacity';
-  return 'Overloaded';
+  return loadTagFromBands(utilization, 'utilization-mis.calc.load-tag-bands') as LoadTag;
 }

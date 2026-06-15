@@ -6,8 +6,14 @@ import { getActiveCycle } from '@/lib/cycle';
 import { sendReminderEmail } from '@/lib/email';
 import { postPendingList } from '@/lib/slack';
 import { getCycleEndDate } from '@/lib/schedule';
+import { getNumberList, getNumber } from 'ie-agent-rules';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Cadence is governed: which weekdays skip reminders, and the earliest weekday
+// the pending-list goes to Slack (utilization-mis.cadence.*).
+const REMINDER_SKIP_DAYS = getNumberList('utilization-mis.cadence.reminder-skip-days');
+const SLACK_PENDING_FROM_DAY = getNumber('utilization-mis.cadence.slack-pending-from-day');
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -22,7 +28,7 @@ export async function GET(req: NextRequest) {
 
   const dayOfWeek = new Date().getDay();
 
-  if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 1) {
+  if (REMINDER_SKIP_DAYS.includes(dayOfWeek)) {
     return NextResponse.json({ message: 'No reminders today' });
   }
 
@@ -44,7 +50,7 @@ export async function GET(req: NextRequest) {
     await sleep(500);
   }
 
-  if (dayOfWeek >= 3) {
+  if (dayOfWeek >= SLACK_PENDING_FROM_DAY) {
     const startDate = new Date(cycle.startDate);
     const endDate = getCycleEndDate(startDate);
     const dateRange = `${startDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -57,6 +63,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     message: `Reminders sent to ${pendingTokens.length} fellows`,
-    slackPosted: dayOfWeek >= 3,
+    slackPosted: dayOfWeek >= SLACK_PENDING_FROM_DAY,
   });
 }

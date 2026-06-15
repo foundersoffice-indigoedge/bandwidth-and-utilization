@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { and, eq, gte, lte, desc, or } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
-import { calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
+import { calculateHoursUtilization, getLoadTag, INVESTMENT_YEAR_START_MONTH } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
 import { fetchAllProjects } from '@/lib/airtable/projects';
@@ -259,7 +259,7 @@ export default async function DashboardPage({
   const { iy: iyParam } = await searchParams;
 
   const now = new Date();
-  const defaultIy = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
+  const defaultIy = now.getMonth() >= INVESTMENT_YEAR_START_MONTH ? now.getFullYear() + 1 : now.getFullYear();
   const iy = iyParam ? parseInt(iyParam) : defaultIy;
   const { start, end } = getIyRange(iy);
 
@@ -318,7 +318,7 @@ export default async function DashboardPage({
   const availableIys = new Set<number>();
   for (const snap of allSnapshots) {
     const d = new Date(snap.snapshotDate);
-    availableIys.add(d.getMonth() >= 6 ? d.getFullYear() + 1 : d.getFullYear());
+    availableIys.add(d.getMonth() >= INVESTMENT_YEAR_START_MONTH ? d.getFullYear() + 1 : d.getFullYear());
   }
   availableIys.add(defaultIy);
 

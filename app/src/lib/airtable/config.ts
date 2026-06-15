@@ -1,9 +1,18 @@
-import { stagesWithBehavior, teamRoleFields, getVpRunFlag } from 'ie-agent-rules';
+import {
+  stagesWithBehavior,
+  teamRoleFields,
+  getVpRunFlag,
+  getNameField,
+  getStageRule,
+} from 'ie-agent-rules';
 import type { ProjectType } from '@/types';
 
-// Team-role field names and the VP-run flag are derived from the shared rules
-// (shared.fields.team-roles, shared.flags.vp-run) so Utilization MIS and
-// ie-checkin read the same fields from one source. Util MIS queries by name.
+// Every Airtable field reference here is derived from the rules store, not
+// hardcoded: name fields from utilization-mis.field-map.name-fields, stage
+// fields + active-stage lists from shared.stages.*, team-role fields from
+// shared.fields.team-roles, the VP-run flag from shared.flags.vp-run. So
+// Utilization MIS and ie-checkin read the same Airtable contract from one
+// source. Util MIS queries by field name.
 
 export const FELLOWS_TABLE_ID = 'tbl2EquvDVwvSaGVy';
 
@@ -20,8 +29,8 @@ export const TABLE_CONFIG: Record<ProjectType, {
 }> = {
   mandate: {
     tableId: 'tblETYHFy9FnXG9TH',
-    nameField: 'Mandate Name',
-    stageField: 'Current Stage of Mandate',
+    nameField: getNameField('mandate'),
+    stageField: getStageRule('shared.stages.mandate').field.name,
     vpAvpFields: teamRoleFields('mandate', 'vpAvp').map((f) => f.name),
     associateFields: teamRoleFields('mandate', 'associate').map((f) => f.name),
     directorFields: teamRoleFields('mandate', 'director').map((f) => f.name),
@@ -31,8 +40,8 @@ export const TABLE_CONFIG: Record<ProjectType, {
   },
   dde: {
     tableId: 'tblxyEcXA5piBJKyP',
-    nameField: 'DDE Name',
-    stageField: 'Current Stage of DDE',
+    nameField: getNameField('dde'),
+    stageField: getStageRule('shared.stages.dde').field.name,
     vpAvpFields: teamRoleFields('dde', 'vpAvp').map((f) => f.name),
     associateFields: teamRoleFields('dde', 'associate').map((f) => f.name),
     directorFields: teamRoleFields('dde', 'director').map((f) => f.name),
@@ -41,8 +50,8 @@ export const TABLE_CONFIG: Record<ProjectType, {
   },
   pitch: {
     tableId: 'tblOMIyzJZYUMrJ2N',
-    nameField: 'Name',
-    stageField: 'Pitch Status',
+    nameField: getNameField('pitch'),
+    stageField: getStageRule('shared.stages.pitch').field.name,
     vpAvpFields: teamRoleFields('pitch', 'vpAvp').map((f) => f.name),
     associateFields: teamRoleFields('pitch', 'associate').map((f) => f.name),
     directorFields: teamRoleFields('pitch', 'director').map((f) => f.name),

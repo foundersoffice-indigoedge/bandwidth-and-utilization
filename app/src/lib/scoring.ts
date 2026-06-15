@@ -1,6 +1,9 @@
+import { getNumber, scoreFromCurve } from 'ie-agent-rules';
 import type { ProjectType, HoursUnit } from '@/types';
 
-export const WORKING_DAYS_PER_WEEK = 6;
+// Working days per week and both hours-to-score curves are governed rules
+// (utilization-mis.calc.*). scoreFromCurve reproduces the old if-chains exactly.
+export const WORKING_DAYS_PER_WEEK = getNumber('utilization-mis.calc.working-days-per-week');
 
 export function normalizeToHoursPerDay(value: number, unit: HoursUnit): number {
   return unit === 'per_week' ? value / WORKING_DAYS_PER_WEEK : value;
@@ -16,17 +19,9 @@ export function scoreHours(hoursPerDay: number, projectType: ProjectType): { sco
 }
 
 function scoreMandateHours(h: number): number {
-  if (h < 1.5) return 1;
-  if (h < 3)   return 2;
-  if (h < 6)   return 3;
-  if (h < 8)   return 4;
-  return 5;
+  return scoreFromCurve(h, 'utilization-mis.calc.score-curve.mandate');
 }
 
 function scoreDdePitchHours(h: number): number {
-  if (h < 0.5) return 1;
-  if (h < 1)   return 2;
-  if (h < 2)   return 3;
-  if (h < 3)   return 4;
-  return 5;
+  return scoreFromCurve(h, 'utilization-mis.calc.score-curve.dde-pitch');
 }

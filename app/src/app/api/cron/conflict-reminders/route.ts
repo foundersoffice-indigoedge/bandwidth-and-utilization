@@ -4,9 +4,13 @@ import { cycles, conflicts, submissions, conflictRemindersSent, directorSignoffs
 import { eq, and, desc, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { sendConflictReminderEmail, sendDirectorSignoffReminderEmail } from '@/lib/email';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
+import { getString, getNumber } from 'ie-agent-rules';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-const REMINDERS_START_DATE = '2026-04-27';
+// Weekly anchor (shared with schedule.ts) and the sign-off nudge interval are
+// governed cadence rules. The IST same-day logic stays in code.
+const REMINDERS_START_DATE = getString('utilization-mis.cadence.weekly-anchor');
+const SIGNOFF_NUDGE_HOURS = getNumber('utilization-mis.cadence.signoff-nudge-hours');
 
 function isSameIstDay(a: Date | null, b: Date): boolean {
   if (!a) return false;
@@ -154,7 +158,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Signoff reminders — daily nudge for open signoffs (status='email_sent', no reminder yet or >24h ago)
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const twentyFourHoursAgo = new Date(Date.now() - SIGNOFF_NUDGE_HOURS * 60 * 60 * 1000);
   const openSignoffs = await db
     .select()
     .from(directorSignoffs)

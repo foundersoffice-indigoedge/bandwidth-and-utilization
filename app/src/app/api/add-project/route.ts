@@ -4,6 +4,7 @@ import { tokens, submissions, pendingProjects, conflicts, cycles } from '@/lib/d
 import { eq, and } from 'drizzle-orm';
 import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
+import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { sendConflictEmail } from '@/lib/email';
 import { postNewProject } from '@/lib/slack';
 import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
     tokenRecord.fellowName,
     cycleRow?.startDate ?? '',
     selfHpw,
-    selfHpw / 84,
+    selfHpw / WEEKLY_CAPACITY_HOURS,
     teammateBandwidthForSlack,
   );
 

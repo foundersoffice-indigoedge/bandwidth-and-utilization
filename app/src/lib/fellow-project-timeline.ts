@@ -1,4 +1,4 @@
-import { WEEKLY_CAPACITY_HOURS } from './utilization';
+import { WEEKLY_CAPACITY_HOURS, INVESTMENT_YEAR_START_MONTH } from './utilization';
 
 export interface TimelineSubmission {
   cycleId: string;
@@ -27,7 +27,7 @@ export interface TimelinePoint {
 
 export function iyOf(dateStr: string): number {
   const d = new Date(dateStr);
-  return d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  return d.getUTCMonth() >= INVESTMENT_YEAR_START_MONTH ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
 }
 
 export function buildTimeline(

@@ -1,6 +1,10 @@
-const REFERENCE_DATE = new Date('2026-04-27');
+import { getNumber, getString } from 'ie-agent-rules';
 
-export const CYCLE_LENGTH_DAYS = 7;
+// Cycle length and the weekly anchor date are governed rules
+// (utilization-mis.cadence.*). The cycle-Monday / cycle-end logic stays in code.
+const REFERENCE_DATE = new Date(getString('utilization-mis.cadence.weekly-anchor'));
+
+export const CYCLE_LENGTH_DAYS = getNumber('utilization-mis.cadence.cycle-length-days');
 
 export function isCycleMonday(date: Date): boolean {
   if (date.getDay() !== 1) return false;
