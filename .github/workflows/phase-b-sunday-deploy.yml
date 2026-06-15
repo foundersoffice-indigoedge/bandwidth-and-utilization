@@ -1,7 +1,8 @@
-name: Phase B - Sunday Util MIS production deploy (one-time)
+name: Phase D - Sunday Util MIS production deploy (one-time)
 
 # One-time scheduled deploy of the rules-migration release branch
-# (phase-b-util-release, pinned to ie-agent-rules v0.5.0) to production on
+# (phase-d-util-rules, pinned to ie-agent-rules v0.12.0 — full migration:
+# shared rules + all Util MIS own rules, Areas U1-U5) to production on
 # Sunday 2026-06-21 — after the bandwidth cycle's data is in and before the next
 # cycle fires (Mon 03:30 UTC). A date guard makes every other run a no-op, so
 # this is safe to merge now. DELETE this file after it has run on 2026-06-21.
@@ -27,7 +28,7 @@ env:
   VERCEL_PROJECT_ID: prj_45fPjmYelVvmIqcBrq1GjYOt409x
   PROD_URL: https://bandwidth-and-utilization.vercel.app
   DEPLOY_DATE: '2026-06-21'
-  RELEASE_REF: phase-b-util-release
+  RELEASE_REF: phase-d-util-rules
   NOTIFY_TO: ajder@indigoedge.com
   NOTIFY_FROM: bandwidth@indigoedge.com
 
@@ -104,8 +105,8 @@ jobs:
             subject="ACTION NEEDED: Util MIS Sunday deploy build failed"
             body="The Vercel deploy/build did not succeed. Production is UNCHANGED (still the previous version) — no rollback needed. Check the GitHub Actions log."
           elif [ "${{ steps.smoke.outputs.ok }}" = "true" ]; then
-            subject="Util MIS deployed to production (Phase B, rules v0.5.0)"
-            body="The Sunday deploy succeeded and production responded healthy. Util MIS is now live on the shared rules. Deployment: ${{ steps.deploy.outputs.url }}"
+            subject="Util MIS deployed to production (Phase D, rules v0.12.0)"
+            body="The Sunday deploy succeeded and production responded healthy. Util MIS is now live on the full rules migration (shared + own rules). Deployment: ${{ steps.deploy.outputs.url }}"
           else
             subject="ACTION NEEDED: Util MIS deploy failed health check, rolled back"
             body="The new deploy did not pass its health check; an automatic rollback to the previous version was attempted. Please verify $PROD_URL and the GitHub Actions log."
