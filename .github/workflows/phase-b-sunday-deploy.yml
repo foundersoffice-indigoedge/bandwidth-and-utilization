@@ -1,0 +1,121 @@
+name: Phase B - Sunday Util MIS production deploy (one-time)
+
+# One-time scheduled deploy of the rules-migration release branch
+# (phase-b-util-release, pinned to ie-agent-rules v0.5.0) to production on
+# Sunday 2026-06-21 — after the bandwidth cycle's data is in and before the next
+# cycle fires (Mon 03:30 UTC). A date guard makes every other run a no-op, so
+# this is safe to merge now. DELETE this file after it has run on 2026-06-21.
+#
+# The deploy is an explicit `vercel deploy --prod`, which promotes the release
+# branch's code to production WITHOUT going through main — so main and the live
+# cycle are never touched until this fires.
+#
+# Requires two repo secrets:
+#   VERCEL_TOKEN     - already added
+#   RESEND_API_KEY   - for the result email (optional; the job still runs without it)
+
+on:
+  schedule:
+    - cron: '0 12 * * 0'   # Sundays 12:00 UTC (17:30 IST) — hours before the Monday cycle
+  workflow_dispatch: {}    # manual runs are STILL gated by the date guard below
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_UJBVcE6h2SiMDi3YZE7M9lEP
+  VERCEL_PROJECT_ID: prj_45fPjmYelVvmIqcBrq1GjYOt409x
+  PROD_URL: https://bandwidth-and-utilization.vercel.app
+  DEPLOY_DATE: '2026-06-21'
+  RELEASE_REF: phase-b-util-release
+  NOTIFY_TO: ajder@indigoedge.com
+  NOTIFY_FROM: bandwidth@indigoedge.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Date guard (only deploy on DEPLOY_DATE)
+        id: guard
+        run: |
+          today="$(date -u +%F)"
+          if [ "$today" = "$DEPLOY_DATE" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "Today is $DEPLOY_DATE — proceeding with the deploy."
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "Today ($today) is not $DEPLOY_DATE — skipping (no-op)."
+          fi
+
+      - name: Checkout release branch
+        if: steps.guard.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+
+      - name: Install Vercel CLI
+        if: steps.guard.outputs.go == 'true'
+        run: npm i -g vercel@latest
+
+      - name: Deploy release branch to production
+        if: steps.guard.outputs.go == 'true'
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -e
+          url="$(vercel deploy --prod --token="$VERCEL_TOKEN" --yes 2>/dev/null | tail -1)"
+          echo "Deployed: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for production alias to propagate
+        if: steps.guard.outputs.go == 'true'
+        run: sleep 20
+
+      - name: Smoke check production
+        if: steps.guard.outputs.go == 'true'
+        id: smoke
+        run: |
+          root="$(curl -s -o /dev/null -w '%{http_code}' "$PROD_URL/")"
+          dash="$(curl -s -o /dev/null -w '%{http_code}' "$PROD_URL/dashboard")"
+          echo "root=$root dashboard=$dash"
+          if [ "$root" = "200" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Roll back on smoke failure
+        if: steps.guard.outputs.go == 'true' && steps.smoke.outputs.ok != 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "Smoke check failed — rolling back to the previous production deployment."
+          vercel rollback --token="$VERCEL_TOKEN" --yes || echo "Rollback returned non-zero; verify manually in the Vercel dashboard."
+
+      - name: Email the result
+        if: steps.guard.outputs.go == 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ "${{ steps.smoke.outputs.ok }}" = "true" ]; then
+            subject="Util MIS deployed to production (Phase B, rules v0.5.0)"
+            body="The Sunday deploy succeeded. Production ($PROD_URL) returned 200. Util MIS is now live on the shared rules. Deployment: ${{ steps.deploy.outputs.url }}"
+          else
+            subject="ACTION NEEDED: Util MIS Sunday deploy failed, rolled back"
+            body="The Sunday deploy did not pass its health check. An automatic rollback to the previous production version was attempted. Please verify $PROD_URL and check the GitHub Actions log. Attempted deployment: ${{ steps.deploy.outputs.url }}"
+          fi
+          if [ -z "$RESEND_API_KEY" ]; then
+            echo "No RESEND_API_KEY secret set, skipping email. Result: $subject"
+            exit 0
+          fi
+          payload="$(jq -n --arg from "$NOTIFY_FROM" --arg to "$NOTIFY_TO" --arg subject "$subject" --arg text "$body" '{from:$from,to:[$to],subject:$subject,text:$text}')"
+          curl -s -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer $RESEND_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$payload" | head -c 400
+          echo ""
+
+      - name: Fail the job if the smoke check failed
+        if: steps.guard.outputs.go == 'true' && steps.smoke.outputs.ok != 'true'
+        run: exit 1
