@@ -5,6 +5,7 @@ export const cycles = pgTable('cycles', {
   id: uuid('id').defaultRandom().primaryKey(),
   startDate: date('start_date').notNull(),
   status: text('status', { enum: ['collecting', 'complete'] }).notNull().default('collecting'),
+  peerEmailsSent: boolean('peer_emails_sent').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 

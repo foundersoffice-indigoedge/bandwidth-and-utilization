@@ -4,6 +4,7 @@ import { formatDateRange } from '@/lib/schedule';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { renderTemplate, EMAIL_SUBJECTS, TYPE_LABELS, TYPE_LABELS_PLURAL, RESOLVER_LABELS, FLAG_ACTION_LABELS } from './templates';
+import { assemblePeerBandwidthData, buildPeerBandwidthEmailHtml } from '@/lib/peer-bandwidth';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
@@ -490,4 +491,46 @@ export async function sendCompletionEmail(
       <p style="margin-top:24px"><a href="${process.env.APP_URL}/dashboard" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">View Dashboard</a></p>
     `,
   });
+}
+
+// --- Peer Bandwidth-Visibility Emails ---
+
+/**
+ * Send per-recipient peer bandwidth snapshots to all eligible fellows
+ * who have at least one teammate. No CC. Returns the count of successfully
+ * sent emails — a single recipient failure is logged but does not abort the rest.
+ */
+export async function sendPeerBandwidthEmails(
+  allSubmissions: {
+    fellowRecordId: string;
+    projectRecordId: string;
+    projectName: string;
+    projectType: string;
+    hoursPerWeek: number | null;
+    hoursPerDay: number;
+    isSelfReport: boolean;
+  }[],
+  fellows: Fellow[],
+  allProjects: import('@/types').ProjectAssignment[],
+  startDate: string,
+): Promise<number> {
+  const dateRange = formatDateRange(startDate);
+  const models = assemblePeerBandwidthData(allSubmissions, fellows, allProjects, dateRange);
+
+  let sent = 0;
+  for (const model of models) {
+    try {
+      await sendEmail({
+        from,
+        to: overrideTo(model.recipient.email),
+        subject: `Team Bandwidth — week of ${dateRange}`,
+        html: buildPeerBandwidthEmailHtml(model, dateRange),
+      });
+      sent++;
+    } catch (err) {
+      console.error(`peer bandwidth email failed for ${model.recipient.name} (${model.recipient.email}):`, err);
+    }
+  }
+
+  return sent;
 }
