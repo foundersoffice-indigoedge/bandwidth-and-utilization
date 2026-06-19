@@ -227,7 +227,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       return {
         projectName: s.projectName,
         projectType: s.projectType as ProjectType,
-        score: s.autoScore,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         isVpRun: proj?.isVpRun,

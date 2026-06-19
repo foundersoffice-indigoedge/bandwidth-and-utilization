@@ -134,7 +134,7 @@ const makeSubmission = (
   hoursValue: hoursPerDay,
   hoursUnit: 'per_day',
   hoursPerDay,
-  autoScore: 1,
+  autoScore: null,
   isSelfReport,
   targetFellowId: null,
   remarks: null,

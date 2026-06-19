@@ -38,7 +38,6 @@ export interface SubmissionEntry {
 export interface ProjectBreakdownItem {
   projectName: string;
   projectType: ProjectType;
-  score: number;
   hoursPerDay: number;
   hoursPerWeek: number;
   isVpRun?: boolean;

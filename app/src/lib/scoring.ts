@@ -1,8 +1,10 @@
-import { getNumber, scoreFromCurve } from 'ie-agent-rules';
-import type { ProjectType, HoursUnit } from '@/types';
+import { getNumber } from 'ie-agent-rules';
+import type { HoursUnit } from '@/types';
 
-// Working days per week and both hours-to-score curves are governed rules
-// (utilization-mis.calc.*). scoreFromCurve reproduces the old if-chains exactly.
+// Working days per week is a governed rule (utilization-mis.calc.*).
+// The old intensity-score curves are retired: utilization is measured purely as
+// hours/week against the 84-hour benchmark (see utilization.ts). The
+// submissions.auto_score column is now unused and slated for removal.
 export const WORKING_DAYS_PER_WEEK = getNumber('utilization-mis.calc.working-days-per-week');
 
 export function normalizeToHoursPerDay(value: number, unit: HoursUnit): number {
@@ -11,17 +13,4 @@ export function normalizeToHoursPerDay(value: number, unit: HoursUnit): number {
 
 export function normalizeToHoursPerWeek(value: number, unit: HoursUnit): number {
   return unit === 'per_day' ? value * WORKING_DAYS_PER_WEEK : value;
-}
-
-export function scoreHours(hoursPerDay: number, projectType: ProjectType): { score: number } {
-  if (projectType === 'mandate') return { score: scoreMandateHours(hoursPerDay) };
-  return { score: scoreDdePitchHours(hoursPerDay) };
-}
-
-function scoreMandateHours(h: number): number {
-  return scoreFromCurve(h, 'utilization-mis.calc.score-curve.mandate');
-}
-
-function scoreDdePitchHours(h: number): number {
-  return scoreFromCurve(h, 'utilization-mis.calc.score-curve.dde-pitch');
 }

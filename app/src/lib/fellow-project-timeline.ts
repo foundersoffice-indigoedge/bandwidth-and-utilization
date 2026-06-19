@@ -11,7 +11,6 @@ export interface TimelineSubmission {
   projectType: 'mandate' | 'dde' | 'pitch';
   hoursPerWeek: number;
   hoursPerDay: number;
-  autoScore: number;
 }
 
 export interface TimelinePoint {
@@ -21,7 +20,6 @@ export interface TimelinePoint {
   projectType: 'mandate' | 'dde' | 'pitch';
   hoursPerWeek: number;
   capacityPct: number;
-  autoScore: number;
   source: 'self' | 'projection';
 }
 
@@ -64,7 +62,6 @@ export function buildTimeline(
       projectType: s.projectType,
       hoursPerWeek: s.hoursPerWeek,
       capacityPct: s.hoursPerWeek / WEEKLY_CAPACITY_HOURS,
-      autoScore: s.autoScore,
       source: s.isSelfReport ? 'self' : 'projection',
     }));
 }

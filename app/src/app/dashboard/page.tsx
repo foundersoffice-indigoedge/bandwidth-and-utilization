@@ -216,7 +216,6 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
       const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => ({
         projectName: s.projectName,
         projectType: s.projectType as ProjectType,
-        score: s.autoScore,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         hasConflict: conflictProjectIds.has(s.projectRecordId),

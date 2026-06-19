@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tokens, submissions, pendingProjects, conflicts, cycles } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
+import { normalizeToHoursPerDay, normalizeToHoursPerWeek } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { sendConflictEmail } from '@/lib/email';
@@ -57,7 +57,6 @@ export async function POST(req: NextRequest) {
 
   const selfHpd = normalizeToHoursPerDay(payload.selfBandwidth.value, payload.selfBandwidth.unit);
   const selfHpw = normalizeToHoursPerWeek(payload.selfBandwidth.value, payload.selfBandwidth.unit);
-  const { score: selfScore } = scoreHours(selfHpd, payload.type);
 
   await db
     .insert(submissions)
@@ -71,7 +70,6 @@ export async function POST(req: NextRequest) {
       hoursUnit: payload.selfBandwidth.unit,
       hoursPerDay: selfHpd,
       hoursPerWeek: selfHpw,
-      autoScore: selfScore,
       isSelfReport: true,
     });
 
@@ -84,7 +82,6 @@ export async function POST(req: NextRequest) {
     for (const tb of payload.teammateBandwidth) {
       const tbHpd = normalizeToHoursPerDay(tb.value, tb.unit);
       const tbHpw = normalizeToHoursPerWeek(tb.value, tb.unit);
-      const { score: tbScore } = scoreHours(tbHpd, payload.type);
 
       const [projSub] = await db
         .insert(submissions)
@@ -98,7 +95,6 @@ export async function POST(req: NextRequest) {
           hoursUnit: tb.unit,
           hoursPerDay: tbHpd,
           hoursPerWeek: tbHpw,
-          autoScore: tbScore,
           isSelfReport: false,
           targetFellowId: tb.recordId,
         })

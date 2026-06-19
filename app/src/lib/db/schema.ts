@@ -30,7 +30,7 @@ export const submissions = pgTable('submissions', {
   hoursValue: real('hours_value').notNull(),
   hoursUnit: text('hours_unit', { enum: ['per_day', 'per_week'] }).notNull(),
   hoursPerDay: real('hours_per_day').notNull(),
-  autoScore: integer('auto_score').notNull(),
+  autoScore: integer('auto_score'),
   isSelfReport: boolean('is_self_report').notNull(),
   targetFellowId: text('target_fellow_id'),
   remarks: text('remarks'),
