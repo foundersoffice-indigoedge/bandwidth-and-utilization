@@ -6,14 +6,12 @@ import { getActiveCycle } from '@/lib/cycle';
 import { sendReminderEmail } from '@/lib/email';
 import { postPendingList } from '@/lib/slack';
 import { getCycleEndDate } from '@/lib/schedule';
-import { getNumberList, getNumber } from 'ie-agent-rules';
-
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Cadence is governed: which weekdays skip reminders, and the earliest weekday
-// the pending-list goes to Slack (utilization-mis.cadence.*).
-const REMINDER_SKIP_DAYS = getNumberList('utilization-mis.cadence.reminder-skip-days');
-const SLACK_PENDING_FROM_DAY = getNumber('utilization-mis.cadence.slack-pending-from-day');
+// Cadence is workflow config (re-inlined from rules store): which weekdays skip reminders,
+// and the earliest weekday the pending-list goes to Slack.
+const REMINDER_SKIP_DAYS = [0, 6, 1];
+const SLACK_PENDING_FROM_DAY = 3;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');

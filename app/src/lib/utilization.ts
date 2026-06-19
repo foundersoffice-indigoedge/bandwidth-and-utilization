@@ -7,8 +7,8 @@ import type { LoadTag } from '@/types';
 export const WEEKLY_CAPACITY_HOURS = getNumber('utilization-mis.calc.weekly-capacity-hours');
 
 // Investment-year start month (0-based; 6 = July). A date in this month or later
-// belongs to the next IY. Governed so every IY boundary check uses one source.
-export const INVESTMENT_YEAR_START_MONTH = getNumber('utilization-mis.calc.investment-year-start-month');
+// belongs to the next IY. Re-inlined from the rules store as workflow config.
+export const INVESTMENT_YEAR_START_MONTH = 6;
 
 export function calculateHoursUtilization(totalHoursPerWeek: number): number {
   return totalHoursPerWeek / WEEKLY_CAPACITY_HOURS;

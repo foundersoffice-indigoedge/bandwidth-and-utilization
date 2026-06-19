@@ -1,7 +1,4 @@
-import { getTemplateMap } from 'ie-agent-rules';
-
-// Project type labels are governed (utilization-mis.template.type-labels).
-const TYPE_LABELS = getTemplateMap('utilization-mis.template.type-labels');
+import { TYPE_LABELS } from './templates';
 
 export async function postToSlack(text: string): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;

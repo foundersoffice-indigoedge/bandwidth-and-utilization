@@ -3,20 +3,16 @@ import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { formatDateRange } from '@/lib/schedule';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
-import { getTemplateMap, renderTemplate } from 'ie-agent-rules';
+import { renderTemplate, EMAIL_SUBJECTS, TYPE_LABELS, TYPE_LABELS_PLURAL, RESOLVER_LABELS, FLAG_ACTION_LABELS } from './templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
 const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 
-// Subjects, type labels, and resolver/action phrasing are governed in the rules
-// store (utilization-mis.template.*). The HTML structure and brand colors below
+// Subjects, type labels, and resolver/action phrasing are re-inlined from the
+// rules store as workflow config. The HTML structure and brand colors below
 // stay in code as presentation.
-const SUBJECTS = getTemplateMap('utilization-mis.template.email-subjects');
-const TYPE_LABELS = getTemplateMap('utilization-mis.template.type-labels');
-const TYPE_LABELS_PLURAL = getTemplateMap('utilization-mis.template.type-labels-plural');
-const RESOLVER_LABELS = getTemplateMap('utilization-mis.template.resolver-labels');
-const FLAG_ACTION_LABELS = getTemplateMap('utilization-mis.template.flag-action-labels');
+const SUBJECTS = EMAIL_SUBJECTS;
 
 /** Send an email via Resend, throwing on failure. Returns the Resend message ID. */
 async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<string | undefined> {

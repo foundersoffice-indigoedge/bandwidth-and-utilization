@@ -7,13 +7,13 @@ import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 import { getCycleEndDate } from '@/lib/schedule';
 import { getLoadTag, WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
-import { getStringList, getTemplateMap } from 'ie-agent-rules';
+import { IY_MONTHS, TYPE_LABELS as TEMPLATE_TYPE_LABELS } from '@/lib/templates';
 import { FellowProjectTab } from './FellowProjectTab';
 
-// Month labels and type-label words are governed (utilization-mis.*); the
-// tailwind colors below stay in code as presentation.
-const MONTHS = getStringList('utilization-mis.vocab.iy-months');
-const TYPE_LABEL_WORDS = getTemplateMap('utilization-mis.template.type-labels');
+// Month labels and type-label words are re-inlined from the rules store as workflow config.
+// The tailwind colors below stay in code as presentation.
+const MONTHS = IY_MONTHS;
+const TYPE_LABEL_WORDS = TEMPLATE_TYPE_LABELS;
 
 function getLoadColor(tag: string): string {
   switch (tag) {
