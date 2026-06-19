@@ -16,9 +16,11 @@ name: Phase D - Sunday Util MIS production deploy (one-time)
 #   RESEND_API_KEY   - for the result email (optional; job still runs without it)
 
 on:
-  schedule:
-    - cron: '0 12 * * 0'   # Sundays 12:00 UTC (17:30 IST) — hours before the Monday cycle
-  workflow_dispatch: {}    # manual runs are STILL gated by the date guard below
+  # NEUTRALIZED 2026-06-19: superseded by the live cleanup deploy (rules
+  # rationalization). The scheduled trigger is removed so this can never
+  # auto-ship phase-d-util-rules over the cleanup work. Manual-only now, and
+  # the date guard below is set to a disabled sentinel as a second stop.
+  workflow_dispatch: {}    # manual only; still gated by the (disabled) date guard
 
 permissions:
   contents: read
@@ -27,7 +29,7 @@ env:
   VERCEL_ORG_ID: team_UJBVcE6h2SiMDi3YZE7M9lEP
   VERCEL_PROJECT_ID: prj_45fPjmYelVvmIqcBrq1GjYOt409x
   PROD_URL: https://bandwidth-and-utilization.vercel.app
-  DEPLOY_DATE: '2026-06-21'
+  DEPLOY_DATE: 'DISABLED'    # was 2026-06-21; neutralized so the guard never matches
   RELEASE_REF: phase-d-util-rules
   NOTIFY_TO: ajder@indigoedge.com
   NOTIFY_FROM: bandwidth@indigoedge.com
