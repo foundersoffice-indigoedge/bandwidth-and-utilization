@@ -5,17 +5,15 @@ import type { SnapshotData, LiveCycleData, LiveFellowData, SignoffPanelRow } fro
 import type { ProjectBreakdownItem } from '@/types';
 import { getTier, TIER_ORDER, type Tier } from '@/lib/tiers';
 import { getCycleEndDate } from '@/lib/schedule';
+import { getLoadTag, WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
+import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { IY_MONTHS, TYPE_LABELS as TEMPLATE_TYPE_LABELS } from '@/lib/templates';
 import { FellowProjectTab } from './FellowProjectTab';
 
-const MONTHS = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-
-function getLoadTag(util: number): string {
-  if (util < 0.30) return 'Free';
-  if (util < 0.60) return 'Comfortable';
-  if (util < 0.85) return 'Busy';
-  if (util <= 1.00) return 'At Capacity';
-  return 'Overloaded';
-}
+// Month labels and type-label words are re-inlined from the rules store as workflow config.
+// The tailwind colors below stay in code as presentation.
+const MONTHS = IY_MONTHS;
+const TYPE_LABEL_WORDS = TEMPLATE_TYPE_LABELS;
 
 function getLoadColor(tag: string): string {
   switch (tag) {
@@ -34,9 +32,9 @@ function getLoadColor(tag: string): string {
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  mandate: { label: 'Mandate', color: 'text-blue-700' },
-  dde: { label: 'DDE', color: 'text-teal-700' },
-  pitch: { label: 'Pitch', color: 'text-violet-700' },
+  mandate: { label: TYPE_LABEL_WORDS.mandate, color: 'text-blue-700' },
+  dde: { label: TYPE_LABEL_WORDS.dde, color: 'text-teal-700' },
+  pitch: { label: TYPE_LABEL_WORDS.pitch, color: 'text-violet-700' },
 };
 
 /** Sort order: VP first, then AVP, Associate 3, 2, 1, Analyst. Alphabetical within each tier. */
@@ -213,7 +211,7 @@ function OverviewGrid({
                             >
                               <div className="font-medium">{Math.round(avgUtil * 100)}%</div>
                               <div className="text-[10px] opacity-75">
-                                {avgHpw.toFixed(1)} / 84 hrs
+                                {avgHpw.toFixed(1)} / {WEEKLY_CAPACITY_HOURS} hrs
                               </div>
                             </td>
                           );
@@ -277,7 +275,7 @@ function ProjectBreakdownTable({ breakdown }: { breakdown: ProjectBreakdownItem[
                   {typeInfo.label}
                 </td>
                 <td className="p-2 text-center">{b.hoursPerDay}</td>
-                <td className="p-2 text-center">{b.hoursPerWeek != null ? b.hoursPerWeek.toFixed(1) : (b.hoursPerDay * 6).toFixed(1)}</td>
+                <td className="p-2 text-center">{b.hoursPerWeek != null ? b.hoursPerWeek.toFixed(1) : (b.hoursPerDay * WORKING_DAYS_PER_WEEK).toFixed(1)}</td>
               </tr>
             );
           })}
@@ -366,7 +364,7 @@ function DrillDown({
       <div className="mt-4 mb-6">
         <h2 className="text-xl font-bold">{fellowName}</h2>
         <p className="text-sm text-gray-500">
-          {designation} · Capacity: 84 hrs/week · IY{iy}
+          {designation} · Capacity: {WEEKLY_CAPACITY_HOURS} hrs/week · IY{iy}
         </p>
       </div>
 
@@ -422,7 +420,7 @@ function DrillDown({
                   {Math.round(avgUtil * 100)}%
                 </td>
                 <td className="border p-2 text-center">
-                  {avgHpw.toFixed(1)} / 84
+                  {avgHpw.toFixed(1)} / {WEEKLY_CAPACITY_HOURS}
                 </td>
                 <td className="border p-2 text-center">{avgMandates % 1 === 0 ? avgMandates : avgMandates.toFixed(1)}</td>
                 <td className="border p-2 text-center">{avgDdes % 1 === 0 ? avgDdes : avgDdes.toFixed(1)}</td>
@@ -466,7 +464,7 @@ function DrillDown({
                       {Math.round((weekSnap.hoursUtilizationPct ?? 0) * 100)}%
                     </td>
                     <td className="border p-2 text-center text-xs">
-                      {(weekSnap.totalHoursPerWeek ?? 0).toFixed(1)} / 84
+                      {(weekSnap.totalHoursPerWeek ?? 0).toFixed(1)} / {WEEKLY_CAPACITY_HOURS}
                     </td>
                     <td className="border p-2 text-center text-xs">{wMandates}</td>
                     <td className="border p-2 text-center text-xs">{wDdes}</td>
@@ -644,7 +642,7 @@ function LiveCycleSection({
                       )}
                     </td>
                     <td className="border p-2 text-gray-600 text-xs">{f.designation}</td>
-                    <td className="border p-2 text-center">{f.totalHoursPerWeek.toFixed(1)} / 84</td>
+                    <td className="border p-2 text-center">{f.totalHoursPerWeek.toFixed(1)} / {WEEKLY_CAPACITY_HOURS}</td>
                     <td className={`border p-2 text-center font-medium ${getLoadColor(f.loadTag)}`}>
                       {Math.round(f.hoursUtilizationPct * 100)}%
                     </td>
@@ -708,7 +706,7 @@ function LiveDrillDown({
         </span>
       </div>
       <p className="text-sm text-gray-500 mb-6">
-        {fellow.designation} · Capacity: 84 hrs/week ·{' '}
+        {fellow.designation} · Capacity: {WEEKLY_CAPACITY_HOURS} hrs/week ·{' '}
         <span className="font-medium">{fellow.totalHoursPerWeek.toFixed(1)} hrs/week</span> ·{' '}
         <span className={`font-medium ${getLoadColor(fellow.loadTag)} px-1.5 rounded`}>
           {Math.round(fellow.hoursUtilizationPct * 100)}% — {fellow.loadTag}

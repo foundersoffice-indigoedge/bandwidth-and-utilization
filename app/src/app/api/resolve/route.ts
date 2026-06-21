@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { conflicts, submissions, directorSignoffs } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { scoreHours, WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { sendConflictResolutionEmail, sendDirectorFlagResolutionConfirmationEmail } from '@/lib/email';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { transitionToFlaggedResolved, createSignoffIfReady } from '@/lib/signoff';
 import { dedupeRecipients } from '@/lib/director-flag';
-import type { ConflictResolution, ProjectType } from '@/types';
+import type { ConflictResolution } from '@/types';
 
 export async function POST(req: NextRequest) {
   const { resolutionToken, action, customHours } = (await req.json()) as {
@@ -74,10 +74,9 @@ export async function POST(req: NextRequest) {
         .where(eq(submissions.id, conflict.flaggedSubmissionId))
         .limit(1);
       if (sub) {
-        const { score } = scoreHours(finalHoursPerDay, sub.projectType as ProjectType);
         await db
           .update(submissions)
-          .set({ hoursPerDay: finalHoursPerDay, hoursPerWeek, autoScore: score })
+          .set({ hoursPerDay: finalHoursPerDay, hoursPerWeek })
           .where(eq(submissions.id, conflict.flaggedSubmissionId));
       }
     }
@@ -190,10 +189,9 @@ export async function POST(req: NextRequest) {
   const resolvedHoursPerWeek = resolvedHours * WORKING_DAYS_PER_WEEK;
 
   if (vpSub) {
-    const { score } = scoreHours(resolvedHours, vpSub.projectType as ProjectType);
     await db
       .update(submissions)
-      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score })
+      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek })
       .where(eq(submissions.id, vpSubmissionId));
   }
 
@@ -205,10 +203,9 @@ export async function POST(req: NextRequest) {
     .limit(1);
 
   if (assocSub) {
-    const { score } = scoreHours(resolvedHours, assocSub.projectType as ProjectType);
     await db
       .update(submissions)
-      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek, autoScore: score })
+      .set({ hoursPerDay: resolvedHours, hoursPerWeek: resolvedHoursPerWeek })
       .where(eq(submissions.id, associateSubmissionId));
   }
 

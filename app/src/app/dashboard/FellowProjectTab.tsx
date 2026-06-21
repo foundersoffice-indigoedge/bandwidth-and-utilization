@@ -31,7 +31,6 @@ interface TimelinePoint {
   projectType: 'mandate' | 'dde' | 'pitch';
   hoursPerWeek: number;
   capacityPct: number;
-  autoScore: number;
   source: 'self' | 'projection';
 }
 

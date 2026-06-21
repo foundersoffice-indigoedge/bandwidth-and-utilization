@@ -3,7 +3,7 @@
  * Tests the full data flow: submission → scoring → finalization → snapshot → dashboard display.
  */
 import { describe, it, expect } from 'vitest';
-import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours, WORKING_DAYS_PER_WEEK } from '../src/lib/scoring';
+import { normalizeToHoursPerDay, normalizeToHoursPerWeek, WORKING_DAYS_PER_WEEK } from '../src/lib/scoring';
 import { calculateHoursUtilization, getLoadTag, WEEKLY_CAPACITY_HOURS } from '../src/lib/utilization';
 import type { ProjectBreakdownItem, HoursUnit } from '../src/types';
 
@@ -13,12 +13,11 @@ import type { ProjectBreakdownItem, HoursUnit } from '../src/types';
 function simulateSubmission(hoursValue: number, hoursUnit: HoursUnit, projectType: 'mandate' | 'dde' | 'pitch') {
   const hoursPerDay = normalizeToHoursPerDay(hoursValue, hoursUnit);
   const hoursPerWeek = normalizeToHoursPerWeek(hoursValue, hoursUnit);
-  const { score } = scoreHours(hoursPerDay, projectType);
-  return { hoursPerDay, hoursPerWeek, score };
+  return { hoursPerDay, hoursPerWeek };
 }
 
 /** Mirrors what cycle.ts does for snapshot creation */
-function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPerWeek: number | null; score: number; projectName: string; projectType: 'mandate' | 'dde' | 'pitch' }>) {
+function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPerWeek: number | null; projectName: string; projectType: 'mandate' | 'dde' | 'pitch' }>) {
   const totalHpw = submissions.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
   const hoursUtilPct = calculateHoursUtilization(totalHpw);
   const hoursLoadTag = getLoadTag(hoursUtilPct);
@@ -26,7 +25,6 @@ function simulateFinalization(submissions: Array<{ hoursPerDay: number; hoursPer
   const breakdown: ProjectBreakdownItem[] = submissions.map(s => ({
     projectName: s.projectName,
     projectType: s.projectType,
-    score: s.score,
     hoursPerDay: s.hoursPerDay,
     hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
   }));
@@ -58,12 +56,6 @@ describe('Submission pipeline: hours conversion', () => {
     expect(result.hoursPerDay).toBe(1.5);
     expect(result.hoursPerWeek).toBe(9);
   });
-
-  it('computes score alongside hours', () => {
-    const result = simulateSubmission(4, 'per_day', 'mandate');
-    expect(result.score).toBe(3);
-    expect(result.hoursPerWeek).toBe(24);
-  });
 });
 
 describe('Conflict resolution: hoursPerWeek update', () => {
@@ -73,21 +65,13 @@ describe('Conflict resolution: hoursPerWeek update', () => {
     const fromNormalize = normalizeToHoursPerWeek(resolvedHours, 'per_day');
     expect(fromResolve).toBe(fromNormalize);
   });
-
-  it('re-scoring with resolved hours produces consistent score + hours', () => {
-    const resolvedHours = 5;
-    const { score } = scoreHours(resolvedHours, 'mandate');
-    const hoursPerWeek = resolvedHours * WORKING_DAYS_PER_WEEK;
-    expect(score).toBe(3);
-    expect(hoursPerWeek).toBe(30);
-  });
 });
 
 describe('Finalization: snapshot creation', () => {
   const submissions = [
-    { hoursPerDay: 4, hoursPerWeek: 20 as number | null, score: 3, projectName: 'Mandate A', projectType: 'mandate' as const },
-    { hoursPerDay: 1, hoursPerWeek: 5 as number | null, score: 3, projectName: 'DDE B', projectType: 'dde' as const },
-    { hoursPerDay: 0.5, hoursPerWeek: 2.5 as number | null, score: 2, projectName: 'Pitch C', projectType: 'pitch' as const },
+    { hoursPerDay: 4, hoursPerWeek: 20 as number | null, projectName: 'Mandate A', projectType: 'mandate' as const },
+    { hoursPerDay: 1, hoursPerWeek: 5 as number | null, projectName: 'DDE B', projectType: 'dde' as const },
+    { hoursPerDay: 0.5, hoursPerWeek: 2.5 as number | null, projectName: 'Pitch C', projectType: 'pitch' as const },
   ];
 
   it('computes totalHoursPerWeek as sum of all project hours', () => {
@@ -108,8 +92,8 @@ describe('Finalization: snapshot creation', () => {
 
   it('handles null hoursPerWeek with fallback to hoursPerDay * 6', () => {
     const oldSubmissions = [
-      { hoursPerDay: 4, hoursPerWeek: null, score: 3, projectName: 'Old Mandate', projectType: 'mandate' as const },
-      { hoursPerDay: 1, hoursPerWeek: null, score: 3, projectName: 'Old DDE', projectType: 'dde' as const },
+      { hoursPerDay: 4, hoursPerWeek: null, projectName: 'Old Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 1, hoursPerWeek: null, projectName: 'Old DDE', projectType: 'dde' as const },
     ];
     const result = simulateFinalization(oldSubmissions);
     expect(result.totalHpw).toBe(30);
@@ -120,7 +104,7 @@ describe('Finalization: snapshot creation', () => {
 describe('ProjectBreakdownItem: hoursPerWeek field', () => {
   it('includes hoursPerWeek in breakdown from new submissions', () => {
     const submissions = [
-      { hoursPerDay: 6, hoursPerWeek: 30 as number | null, score: 4, projectName: 'Big Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 6, hoursPerWeek: 30 as number | null, projectName: 'Big Mandate', projectType: 'mandate' as const },
     ];
     const result = simulateFinalization(submissions);
     expect(result.breakdown[0].hoursPerWeek).toBe(30);
@@ -128,7 +112,7 @@ describe('ProjectBreakdownItem: hoursPerWeek field', () => {
 
   it('computes hoursPerWeek from fallback for old submissions', () => {
     const submissions = [
-      { hoursPerDay: 6, hoursPerWeek: null, score: 4, projectName: 'Old Mandate', projectType: 'mandate' as const },
+      { hoursPerDay: 6, hoursPerWeek: null, projectName: 'Old Mandate', projectType: 'mandate' as const },
     ];
     const result = simulateFinalization(submissions);
     expect(result.breakdown[0].hoursPerWeek).toBe(36);
@@ -161,7 +145,6 @@ describe('Edge cases: extreme values', () => {
     const result = simulateSubmission(40, 'per_week', 'mandate');
     expect(result.hoursPerDay).toBeCloseTo(40 / 6);
     expect(result.hoursPerWeek).toBe(40);
-    expect(result.score).toBe(4);
   });
 
   it('capacity constant is 84', () => {

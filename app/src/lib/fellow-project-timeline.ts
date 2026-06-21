@@ -1,4 +1,4 @@
-import { WEEKLY_CAPACITY_HOURS } from './utilization';
+import { WEEKLY_CAPACITY_HOURS, INVESTMENT_YEAR_START_MONTH } from './utilization';
 
 export interface TimelineSubmission {
   cycleId: string;
@@ -11,7 +11,6 @@ export interface TimelineSubmission {
   projectType: 'mandate' | 'dde' | 'pitch';
   hoursPerWeek: number;
   hoursPerDay: number;
-  autoScore: number;
 }
 
 export interface TimelinePoint {
@@ -21,13 +20,12 @@ export interface TimelinePoint {
   projectType: 'mandate' | 'dde' | 'pitch';
   hoursPerWeek: number;
   capacityPct: number;
-  autoScore: number;
   source: 'self' | 'projection';
 }
 
 export function iyOf(dateStr: string): number {
   const d = new Date(dateStr);
-  return d.getUTCMonth() >= 6 ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  return d.getUTCMonth() >= INVESTMENT_YEAR_START_MONTH ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
 }
 
 export function buildTimeline(
@@ -64,7 +62,6 @@ export function buildTimeline(
       projectType: s.projectType,
       hoursPerWeek: s.hoursPerWeek,
       capacityPct: s.hoursPerWeek / WEEKLY_CAPACITY_HOURS,
-      autoScore: s.autoScore,
       source: s.isSelfReport ? 'self' : 'projection',
     }));
 }

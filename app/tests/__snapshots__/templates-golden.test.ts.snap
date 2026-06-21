@@ -1,0 +1,406 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`U5 golden — email senders > renders all email payloads byte-stable 1`] = `
+[
+  {
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Asha,</p>
+      <p>Please submit your bandwidth update for the current cycle (4 May – 10 May 2026).</p>
+      <p style="background:#f0f9ff;padding:12px 16px;border-radius:8px;border-left:4px solid #2563eb;margin:16px 0">You have <strong>3 active projects</strong>: 1 mandate, 1 DDE, 1 pitch.</p>
+      
+        <div style="margin:24px 0 16px">
+          <p style="font-weight:700;font-size:14px;margin:0 0 8px;color:#1e40af;text-transform:uppercase;letter-spacing:0.5px">Mandates</p>
+          <table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#dbeafe"><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#1e40af;border-bottom:2px solid #1e40af20">Project</th><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#1e40af;border-bottom:2px solid #1e40af20">Stage</th></tr>
+            <tr style="background:#ffffff"><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px">Acme</td><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">In Production</td></tr>
+          </table>
+        </div>
+        <div style="margin:24px 0 16px">
+          <p style="font-weight:700;font-size:14px;margin:0 0 8px;color:#0f766e;text-transform:uppercase;letter-spacing:0.5px">DDEs</p>
+          <table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#ccfbf1"><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#0f766e;border-bottom:2px solid #0f766e20">Project</th><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#0f766e;border-bottom:2px solid #0f766e20">Stage</th></tr>
+            <tr style="background:#ffffff"><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px">Beta</td><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">DDE In Progress</td></tr>
+          </table>
+        </div>
+        <div style="margin:24px 0 16px">
+          <p style="font-weight:700;font-size:14px;margin:0 0 8px;color:#7c3aed;text-transform:uppercase;letter-spacing:0.5px">Pitches</p>
+          <table style="border-collapse:collapse;width:100%;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb">
+            <tr style="background:#ede9fe"><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#7c3aed;border-bottom:2px solid #7c3aed20">Project</th><th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;color:#7c3aed;border-bottom:2px solid #7c3aed20">Stage</th></tr>
+            <tr style="background:#ffffff"><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px">Gamma</td><td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">Pitch Work in Progress</td></tr>
+          </table>
+        </div>
+      <a href="https://util.test/submit/tok1" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin-top:16px">Submit Your Bandwidth</a>
+    ",
+    "subject": "Bandwidth Update — 4 May – 10 May 2026",
+    "to": "asha@indigoedge.com",
+  },
+  {
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Asha,</p>
+      <p>Your bandwidth update for 4 May – 10 May 2026 is still pending. Please submit it at your earliest convenience.</p>
+      <a href="https://util.test/submit/tok1" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Submit Your Bandwidth</a>
+    ",
+    "subject": "Reminder: Bandwidth Update Pending",
+    "to": "asha@indigoedge.com",
+  },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Ravi,</p>
+      <p>On <strong>Acme</strong>, you reported Asha will spend <strong>5 hrs/day</strong>, but Asha reported <strong>3 hrs/day</strong>.</p>
+      <p>Please confirm the accurate number:</p>
+      <div style="margin:16px 0">
+        <a href="https://util.test/resolve/rtok?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">Asha's number (3 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (5 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
+      </div>
+    ",
+    "subject": "Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <div style="background:#f0fdf4;padding:16px 20px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#166534">Conflict Resolved</p>
+        <p style="margin:0;font-size:14px">The bandwidth conflict on <strong>Acme</strong> has been resolved.</p>
+        <p style="margin:8px 0 0;font-size:14px">Final value: <strong>4 hrs/day</strong> (Asha's number).</p>
+      </div>
+    ",
+    "subject": "Re: Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <div style="background:#f0fdf4;padding:16px 20px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#166534">Conflict Resolved</p>
+        <p style="margin:0;font-size:14px">The bandwidth conflict on <strong>Acme</strong> has been resolved.</p>
+        <p style="margin:8px 0 0;font-size:14px">Final value: <strong>5 hrs/day</strong> (Ravi's number).</p>
+      </div>
+    ",
+    "subject": "Re: Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <div style="background:#f0fdf4;padding:16px 20px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#166534">Conflict Resolved</p>
+        <p style="margin:0;font-size:14px">The bandwidth conflict on <strong>Acme</strong> has been resolved.</p>
+        <p style="margin:8px 0 0;font-size:14px">Final value: <strong>4.5 hrs/day</strong> (a custom number).</p>
+      </div>
+    ",
+    "subject": "Re: Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <div style="background:#fef3c7;padding:16px 20px;border-radius:8px;border-left:4px solid #d97706;margin:16px 0">
+        <p style="margin:0 0 8px;font-weight:600;color:#92400e">Conflict Still Pending</p>
+        <p style="margin:0;font-size:14px">Hi Ravi, the bandwidth conflict on <strong>Acme</strong> is still unresolved.</p>
+      </div>
+      <p>On <strong>Acme</strong>, you reported Asha will spend <strong>5 hrs/day</strong>, but Asha reported <strong>3 hrs/day</strong>.</p>
+      <p>Please resolve:</p>
+      <div style="margin:16px 0">
+        <a href="https://util.test/resolve/rtok?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">Asha's number (3 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (5 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
+      </div>
+    ",
+    "subject": "Reminder: Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "pai@indigoedge.com",
+      "ajder@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Dev,</p>
+      <p>Your team has finished reporting bandwidth on the projects you direct for the cycle of <strong>4 May – 10 May 2026</strong>. Please review the summary below and either confirm everything looks right or flag specific lines you think need a second look.</p>
+      <p style="margin:24px 0">
+        <a href="https://util.test/signoff/stok" style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Review & confirm bandwidth →</a>
+      </p>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 8px">One-click confirmation if everything looks right. Or flag specific lines and we'll route them for resolution.</p>
+      <div style="margin:20px 0">
+      <p style="font-weight:600;margin:0 0 6px;font-size:14px">Acme <span style="font-size:11px;color:#6b7280;font-weight:400">(Mandate)</span></p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Person</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Designation</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/day</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/week</th>
+        </tr>
+        <tr style="background:#ffffff">
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">Asha</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">Associate 2</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">4.00</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">24.0</td>
+      </tr>
+      </table>
+    </div><div style="margin:20px 0">
+      <p style="font-weight:600;margin:0 0 6px;font-size:14px">Beta <span style="font-size:11px;color:#6b7280;font-weight:400">(DDE)</span></p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Person</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Designation</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/day</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/week</th>
+        </tr>
+        <tr style="background:#ffffff">
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">Ravi</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">AVP</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">1.00</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">6.0</td>
+      </tr>
+      </table>
+    </div><div style="margin:20px 0">
+      <p style="font-weight:600;margin:0 0 6px;font-size:14px">Gamma <span style="font-size:11px;color:#6b7280;font-weight:400">(Pitch)</span></p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Person</th>
+          <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600">Designation</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/day</th>
+          <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600">Hrs/week</th>
+        </tr>
+        <tr style="background:#ffffff">
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">Mira</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">Associate 1</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">2.00</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right">12.0</td>
+      </tr>
+      </table>
+    </div>
+      <p style="font-size:12px;color:#9ca3af;margin-top:32px">A reminder will be sent daily until this is responded to.</p>
+    ",
+    "subject": "Bandwidth Sign-off — 4 May – 10 May 2026 — 3 projects",
+    "to": "dev@indigoedge.com",
+  },
+  {
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <p>Hi Dev,</p>
+      <p>Friendly nudge — your bandwidth sign-off for <strong>4 May – 10 May 2026</strong> is still pending.</p>
+      <p style="margin:24px 0">
+        <a href="https://util.test/signoff/stok" style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">Open sign-off →</a>
+      </p>
+    ",
+    "subject": "Re: Bandwidth Sign-off — 4 May – 10 May 2026",
+    "to": "dev@indigoedge.com",
+  },
+  {
+    "cc": [
+      "dev@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Ravi,</p>
+      <p><strong>Dev</strong> flagged <strong>Asha</strong>'s (Associate 2) bandwidth on <strong>Acme</strong> (Mandate) this cycle.</p>
+      <p><strong>Original value:</strong> 4.00 hrs/day (24.0 hrs/week)</p>
+      <p><strong>Director's proposed value:</strong> 3.00 hrs/day (18.0 hrs/week)</p>
+      <p><strong>Director's comment:</strong> "too high"</p>
+      <div style="margin:24px 0">
+        <a href="https://util.test/resolve/ftok?action=keep_original" style="background:#6b7280;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Keep original (4.00)</a>
+        <a href="https://util.test/resolve/ftok?action=use_proposed" style="background:#2563eb;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Use director's value (3.00)</a>
+        <a href="https://util.test/resolve/ftok" style="background:#ffffff;color:#1e40af;border:2px solid #2563eb;padding:8px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Provide a different value</a>
+      </div>
+    ",
+    "subject": "Bandwidth Sign-off Flag — Acme — Asha",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "dev@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Ravi,</p>
+      <p><strong>Dev</strong> flagged <strong>Mira</strong>'s (Associate 1) bandwidth on <strong>Gamma</strong> (Pitch) this cycle.</p>
+      <p><strong>Original value:</strong> 2.00 hrs/day (12.0 hrs/week)</p>
+      
+      
+      <div style="margin:24px 0">
+        <a href="https://util.test/resolve/ftok?action=keep_original" style="background:#6b7280;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Keep original (2.00)</a>
+        
+        <a href="https://util.test/resolve/ftok" style="background:#ffffff;color:#1e40af;border:2px solid #2563eb;padding:8px 18px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;margin:4px">Provide a different value</a>
+      </div>
+    ",
+    "subject": "Bandwidth Sign-off Flag — Gamma — Mira",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "dev@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <p>Resolved: <strong>4.00 hrs/day</strong>.</p>
+      <p>The resolver kept the original value.</p>
+    ",
+    "subject": "Re: Bandwidth Sign-off Flag — Acme — Asha",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "dev@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <p>Resolved: <strong>3.00 hrs/day</strong>.</p>
+      <p>The resolver used the director's proposed value.</p>
+    ",
+    "subject": "Re: Bandwidth Sign-off Flag — Acme — Asha",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "dev@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "headers": {
+      "In-Reply-To": "orig1",
+      "References": "orig1",
+    },
+    "html": "
+      <p>Resolved: <strong>4.50 hrs/day</strong>.</p>
+      <p>The resolver set a custom value.</p>
+    ",
+    "subject": "Re: Bandwidth Sign-off Flag — Acme — Asha",
+    "to": "ravi@indigoedge.com",
+  },
+  {
+    "cc": [
+      "pai@indigoedge.com",
+      "ajder@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">Cycle Complete: 4 May – 10 May 2026</p>
+      <div style="background:#f0fdf4;padding:12px 16px;border-radius:8px;border-left:4px solid #16a34a;margin:16px 0">
+        <p style="margin:0;font-size:14px"><strong>12</strong> submissions processed · <strong>2</strong> conflicts resolved</p>
+      </div>
+      
+      <p style="font-weight:700;font-size:15px;margin:24px 0 8px;color:#1f2937">Fellow Utilization</p>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <tr style="background:#f3f4f6">
+          <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Fellow</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Role</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Hrs/Week</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Utilization</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Load</th>
+          <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:600;border-bottom:2px solid #d1d5db">Projects</th>
+        </tr>
+        <tr style="background:#ffffff">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500">Ravi</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">AVP</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">80.0 / 84</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;text-align:center">95%</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center"><span style="background:#fed7aa;color:#9a3412;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">At Capacity</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">5</td>
+      </tr><tr style="background:#f9fafb">
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:500">Asha</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280">Associate 2</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">42.0 / 84</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;text-align:center">50%</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center"><span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600">Comfortable</span></td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:center">3</td>
+      </tr>
+      </table>
+      <p style="margin-top:24px"><a href="https://util.test/dashboard" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">View Dashboard</a></p>
+    ",
+    "subject": "Bandwidth Cycle 4 May – 10 May 2026 — Complete",
+    "to": "ajder@indigoedge.com",
+  },
+]
+`;
+
+exports[`U5 golden — slack senders > renders all slack messages byte-stable 1`] = `
+[
+  "The following people have not submitted their bandwidth update for 4 May – 10 May 2026:
+• Asha
+• Ravi",
+  "Asha flagged: on leave Thursday",
+  ":triangular_flag_on_post: *Director sign-off flag* — Dev — Cycle 4 May – 10 May 2026
+
+Dev flagged 2 bandwidth claims:
+
+• *Acme* (Mandate) — Asha (Associate 2)
+    Reported: 4.00 hrs/day
+    Proposed: 3.00 hrs/day
+    Comment: "too high"
+    Resolution email sent to: Ravi
+
+• *Gamma* (Pitch) — Mira (Associate 1)
+    Reported: 2.00 hrs/day
+    Proposed: no proposed value
+    Resolution email sent to: Ravi
+
+_Sign-off: Dev — flagged (resolution pending)_",
+  ":new: *New DDE*
+*Name:* Delta
+*Director:* Dev
+*Team:* Asha, Ravi
+*Added by:* Asha
+*Cycle:* Week of 2026-05-04
+Bandwidth given by Asha: 18.0 hrs/week (21% of capacity)
+Bandwidth noted for Ravi: 12.0 hrs/week",
+]
+`;

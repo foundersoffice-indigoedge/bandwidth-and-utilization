@@ -15,8 +15,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@neondatabase/serverless@1.0.2)(@types/pg@8.20.0)
       ie-agent-rules:
-        specifier: git+https://github.com/foundersoffice-indigoedge/ie-agent-rules.git#v0.1.0
-        version: git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#80308278be7bad08814eaa4c9af0b8153a836692
+        specifier: git+https://github.com/foundersoffice-indigoedge/ie-agent-rules.git#v0.12.0
+        version: git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#f49e1cb76823b358a22e4f282cf3257a92722822
       next:
         specifier: 16.2.2
         version: 16.2.2(@babel/core@7.29.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -2108,9 +2108,9 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
-  ie-agent-rules@git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#80308278be7bad08814eaa4c9af0b8153a836692:
-    resolution: {commit: 80308278be7bad08814eaa4c9af0b8153a836692, repo: git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git, type: git}
-    version: 0.1.0
+  ie-agent-rules@git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#f49e1cb76823b358a22e4f282cf3257a92722822:
+    resolution: {commit: f49e1cb76823b358a22e4f282cf3257a92722822, repo: git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git, type: git}
+    version: 0.12.0
 
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
@@ -4941,7 +4941,7 @@ snapshots:
     dependencies:
       hermes-estree: 0.25.1
 
-  ie-agent-rules@git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#80308278be7bad08814eaa4c9af0b8153a836692: {}
+  ie-agent-rules@git+ssh://git@github.com/foundersoffice-indigoedge/ie-agent-rules.git#f49e1cb76823b358a22e4f282cf3257a92722822: {}
 
   ignore@5.3.2: {}
 

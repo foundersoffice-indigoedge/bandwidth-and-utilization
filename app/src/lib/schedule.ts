@@ -1,3 +1,5 @@
+// Cycle length and the weekly anchor date are workflow config (re-inlined from rules store).
+// The cycle-Monday / cycle-end logic stays in code.
 const REFERENCE_DATE = new Date('2026-04-27');
 
 export const CYCLE_LENGTH_DAYS = 7;

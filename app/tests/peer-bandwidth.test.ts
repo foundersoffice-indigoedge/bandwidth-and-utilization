@@ -1,0 +1,133 @@
+import { describe, it, expect } from 'vitest';
+import { assemblePeerBandwidthData } from '../src/lib/peer-bandwidth';
+import type { Fellow } from '../src/types';
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
+const fellowA: Fellow = { recordId: 'rA', name: 'Alice', email: 'alice@ie.com', designation: 'VP' };
+const fellowB: Fellow = { recordId: 'rB', name: 'Bob', email: 'bob@ie.com', designation: 'Associate 2' };
+const fellowC: Fellow = { recordId: 'rC', name: 'Carol', email: 'carol@ie.com', designation: 'Associate 3' };
+const directorId = 'rDIR'; // not in the eligible fellows list
+
+const fellows = [fellowA, fellowB, fellowC];
+
+const projects = [
+  {
+    projectRecordId: 'p1',
+    projectName: 'Proj Alpha',
+    projectType: 'mandate' as const,
+    stage: 'Shortlisting',
+    vpAvpIds: ['rA'],
+    associateIds: ['rB'],
+    directorIds: [directorId],
+    isVpRun: false,
+  },
+  {
+    projectRecordId: 'p2',
+    projectName: 'Proj Beta',
+    projectType: 'dde' as const,
+    stage: 'In Progress',
+    vpAvpIds: ['rA'],
+    associateIds: ['rC'],
+    directorIds: [directorId],
+    isVpRun: false,
+  },
+  {
+    projectRecordId: 'p3',
+    projectName: 'Proj Gamma',
+    projectType: 'pitch' as const,
+    stage: 'Drafting',
+    vpAvpIds: [],
+    associateIds: ['rB', 'rC'],
+    directorIds: [directorId],
+    isVpRun: false,
+  },
+];
+
+// Submissions: self-reports for each fellow
+// Alice: p1=10h/wk, p2=20h/wk → 30h/wk → util = 30/84 ≈ 0.357 → Comfortable
+// Bob:   p1=42h/wk, p3=42h/wk → 84h/wk → util = 1.0 → At Capacity
+// Carol: p2=6h/day (no hoursPerWeek), p3=12h/wk
+//        normalize p2: 6 * 6 = 36h/wk; total = 36+12 = 48h/wk → util = 48/84 ≈ 0.571 → Comfortable
+const submissions = [
+  { fellowRecordId: 'rA', projectRecordId: 'p1', projectName: 'Proj Alpha', projectType: 'mandate', hoursPerWeek: 10, hoursPerDay: 10 / 6, isSelfReport: true },
+  { fellowRecordId: 'rA', projectRecordId: 'p2', projectName: 'Proj Beta',  projectType: 'dde',     hoursPerWeek: 20, hoursPerDay: 20 / 6, isSelfReport: true },
+  { fellowRecordId: 'rB', projectRecordId: 'p1', projectName: 'Proj Alpha', projectType: 'mandate', hoursPerWeek: 42, hoursPerDay: 7,       isSelfReport: true },
+  { fellowRecordId: 'rB', projectRecordId: 'p3', projectName: 'Proj Gamma', projectType: 'pitch',   hoursPerWeek: 42, hoursPerDay: 7,       isSelfReport: true },
+  { fellowRecordId: 'rC', projectRecordId: 'p2', projectName: 'Proj Beta',  projectType: 'dde',     hoursPerWeek: null, hoursPerDay: 6,     isSelfReport: true },
+  { fellowRecordId: 'rC', projectRecordId: 'p3', projectName: 'Proj Gamma', projectType: 'pitch',   hoursPerWeek: 12, hoursPerDay: 2,       isSelfReport: true },
+];
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('assemblePeerBandwidthData', () => {
+  it('excludes fellows with 0 teammates from output', () => {
+    // Only fellowD has no shared projects with anyone
+    const fellowD: Fellow = { recordId: 'rD', name: 'Dave', email: 'dave@ie.com', designation: 'Associate 1' };
+    const soloFellows = [...fellows, fellowD];
+    const result = assemblePeerBandwidthData(submissions, soloFellows, projects, 'Apr 27 – May 3, 2026');
+    const recipientIds = result.map(m => m.recipient.recordId);
+    expect(recipientIds).not.toContain('rD');
+  });
+
+  it('returns models for all fellows with teammates', () => {
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    const ids = result.map(m => m.recipient.recordId).sort();
+    // Alice is teammates with Bob (p1) and Carol (p2); Bob with Alice+Carol; Carol with Alice+Bob
+    expect(ids).toEqual(['rA', 'rB', 'rC'].sort());
+  });
+
+  it('marks shared projects correctly', () => {
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
+    // Alice shares p1 with Bob
+    const bobAsTeammate = aliceModel.teammates.find(t => t.recordId === 'rB')!;
+    const sharedProject = bobAsTeammate.projects.find(p => p.projectRecordId === 'p1');
+    expect(sharedProject?.shared).toBe(true);
+    // Alice does NOT share p3 with Bob
+    const notSharedProject = bobAsTeammate.projects.find(p => p.projectRecordId === 'p3');
+    expect(notSharedProject?.shared).toBe(false);
+  });
+
+  it('sorts teammates busiest-first', () => {
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
+    // Bob: 84h/wk (At Capacity), Carol: 48h/wk (Comfortable)
+    expect(aliceModel.teammates[0].recordId).toBe('rB');
+    expect(aliceModel.teammates[1].recordId).toBe('rC');
+  });
+
+  it('never treats a director-only participant as a teammate', () => {
+    // directorId appears only in directorIds[], not in vpAvpIds or associateIds
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    for (const model of result) {
+      for (const tm of model.teammates) {
+        expect(tm.recordId).not.toBe(directorId);
+      }
+    }
+  });
+
+  it('normalizes per-day hours to per-week when hoursPerWeek is null', () => {
+    // Carol's p2 submission: hoursPerWeek=null, hoursPerDay=6 → 6*6=36h/wk
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    // Find Carol as a teammate in someone's model
+    const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
+    const carolAsTeammate = aliceModel.teammates.find(t => t.recordId === 'rC')!;
+    const p2 = carolAsTeammate.projects.find(p => p.projectRecordId === 'p2')!;
+    expect(p2.hoursPerWeek).toBeCloseTo(36, 1);
+    expect(carolAsTeammate.totalHoursPerWeek).toBeCloseTo(48, 1);
+  });
+
+  it('sorts a teammate projects shared-first then by name', () => {
+    const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
+    const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
+    const bobAsTeammate = aliceModel.teammates.find(t => t.recordId === 'rB')!;
+    // Bob's projects: p1 (shared with Alice) and p3 (not shared)
+    expect(bobAsTeammate.projects[0].shared).toBe(true);
+    expect(bobAsTeammate.projects[1].shared).toBe(false);
+  });
+});

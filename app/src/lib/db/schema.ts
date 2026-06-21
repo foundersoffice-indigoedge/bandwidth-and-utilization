@@ -5,6 +5,7 @@ export const cycles = pgTable('cycles', {
   id: uuid('id').defaultRandom().primaryKey(),
   startDate: date('start_date').notNull(),
   status: text('status', { enum: ['collecting', 'complete'] }).notNull().default('collecting'),
+  peerEmailsSent: boolean('peer_emails_sent').notNull().default(false),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -30,7 +31,7 @@ export const submissions = pgTable('submissions', {
   hoursValue: real('hours_value').notNull(),
   hoursUnit: text('hours_unit', { enum: ['per_day', 'per_week'] }).notNull(),
   hoursPerDay: real('hours_per_day').notNull(),
-  autoScore: integer('auto_score').notNull(),
+  autoScore: integer('auto_score'),
   isSelfReport: boolean('is_self_report').notNull(),
   targetFellowId: text('target_fellow_id'),
   remarks: text('remarks'),

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tokens, submissions, conflicts, pendingProjects } from '@/lib/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { normalizeToHoursPerDay, normalizeToHoursPerWeek, scoreHours } from '@/lib/scoring';
+import { normalizeToHoursPerDay, normalizeToHoursPerWeek } from '@/lib/scoring';
 import { isConflict } from '@/lib/conflicts';
 import { sendConflictEmail } from '@/lib/email';
 import { postRemark } from '@/lib/slack';
@@ -74,7 +74,6 @@ export async function POST(req: NextRequest) {
 
     const hoursPerDay = normalizeToHoursPerDay(entry.hoursValue, entry.hoursUnit);
     const hoursPerWeek = normalizeToHoursPerWeek(entry.hoursValue, entry.hoursUnit);
-    const { score } = scoreHours(hoursPerDay, projectType);
     const isSelfReport = entry.targetFellowId === null;
 
     if (isPending) {
@@ -105,7 +104,6 @@ export async function POST(req: NextRequest) {
             hoursUnit: entry.hoursUnit,
             hoursPerDay,
             hoursPerWeek,
-            autoScore: score,
             remarks: isSelfReport ? remarksText : existing.remarks,
           })
           .where(eq(submissions.id, existing.id));
@@ -125,7 +123,6 @@ export async function POST(req: NextRequest) {
         hoursUnit: entry.hoursUnit,
         hoursPerDay,
         hoursPerWeek,
-        autoScore: score,
         isSelfReport,
         targetFellowId: entry.targetFellowId,
         remarks: isSelfReport ? remarksText : null,

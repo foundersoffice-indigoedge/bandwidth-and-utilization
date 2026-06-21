@@ -24,7 +24,6 @@ function sub(overrides: Partial<TimelineSubmission>): TimelineSubmission {
     projectType: 'mandate',
     hoursPerWeek: 24,
     hoursPerDay: 4,
-    autoScore: 3,
     ...overrides,
   };
 }

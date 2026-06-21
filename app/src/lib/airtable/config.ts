@@ -1,5 +1,18 @@
-import { stagesWithBehavior } from 'ie-agent-rules';
+import {
+  stagesWithBehavior,
+  teamRoleFields,
+  getVpRunFlag,
+  getNameField,
+  getStageRule,
+} from 'ie-agent-rules';
 import type { ProjectType } from '@/types';
+
+// Every Airtable field reference here is derived from the rules store, not
+// hardcoded: name fields from utilization-mis.field-map.name-fields, stage
+// fields + active-stage lists from shared.stages.*, team-role fields from
+// shared.fields.team-roles, the VP-run flag from shared.flags.vp-run. So
+// Utilization MIS and ie-checkin read the same Airtable contract from one
+// source. Util MIS queries by field name.
 
 export const FELLOWS_TABLE_ID = 'tbl2EquvDVwvSaGVy';
 
@@ -16,41 +29,33 @@ export const TABLE_CONFIG: Record<ProjectType, {
 }> = {
   mandate: {
     tableId: 'tblETYHFy9FnXG9TH',
-    nameField: 'Mandate Name',
-    stageField: 'Current Stage of Mandate',
-    vpAvpFields: ['Mandate VP / AVP 1', 'Mandate VP / AVP 2'],
-    associateFields: ['Mandate Associate 1', 'Mandate Associate 2'],
-    directorFields: ['Mandate Director'],
-    isVpRunField: 'Is this a VP run mandate?',
-    // Derived from the shared rule (shared.stages.mandate) so Utilization MIS and
-    // ie-checkin can never disagree on which mandate stages are active.
+    nameField: getNameField('mandate'),
+    stageField: getStageRule('shared.stages.mandate').field.name,
+    vpAvpFields: teamRoleFields('mandate', 'vpAvp').map((f) => f.name),
+    associateFields: teamRoleFields('mandate', 'associate').map((f) => f.name),
+    directorFields: teamRoleFields('mandate', 'director').map((f) => f.name),
+    isVpRunField: getVpRunFlag().field.name,
     activeStages: stagesWithBehavior('shared.stages.mandate', 'active'),
     label: 'Mandates',
   },
   dde: {
     tableId: 'tblxyEcXA5piBJKyP',
-    nameField: 'DDE Name',
-    stageField: 'Current Stage of DDE',
-    vpAvpFields: ['DDE VP / AVP'],
-    associateFields: ['DDE Associate'],
-    directorFields: ['DDE Director'],
-    activeStages: [
-      'Not Started',
-      'DDE In Progress',
-    ],
+    nameField: getNameField('dde'),
+    stageField: getStageRule('shared.stages.dde').field.name,
+    vpAvpFields: teamRoleFields('dde', 'vpAvp').map((f) => f.name),
+    associateFields: teamRoleFields('dde', 'associate').map((f) => f.name),
+    directorFields: teamRoleFields('dde', 'director').map((f) => f.name),
+    activeStages: stagesWithBehavior('shared.stages.dde', 'active'),
     label: 'DDEs',
   },
   pitch: {
     tableId: 'tblOMIyzJZYUMrJ2N',
-    nameField: 'Name',
-    stageField: 'Pitch Status',
-    vpAvpFields: ['Pitch VP / AVP', 'Pitch VP / AVP 2'],
-    associateFields: ['Pitch Associate 1', 'Pitch Associate 2'],
-    directorFields: ['Pitch Director'],
-    activeStages: [
-      'Pitch Work in Progress',
-      'Pitch Done - Awaiting Outcome',
-    ],
+    nameField: getNameField('pitch'),
+    stageField: getStageRule('shared.stages.pitch').field.name,
+    vpAvpFields: teamRoleFields('pitch', 'vpAvp').map((f) => f.name),
+    associateFields: teamRoleFields('pitch', 'associate').map((f) => f.name),
+    directorFields: teamRoleFields('pitch', 'director').map((f) => f.name),
+    activeStages: stagesWithBehavior('shared.stages.pitch', 'active'),
     label: 'Pitches',
   },
 };

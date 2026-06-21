@@ -25,7 +25,6 @@ async function loadRelevantSubmissions(fellowRecordId: string): Promise<Timeline
       projectType: submissions.projectType,
       hoursPerWeek: submissions.hoursPerWeek,
       hoursPerDay: submissions.hoursPerDay,
-      autoScore: submissions.autoScore,
     })
     .from(submissions)
     .innerJoin(cycles, eq(submissions.cycleId, cycles.id))
@@ -47,7 +46,6 @@ async function loadRelevantSubmissions(fellowRecordId: string): Promise<Timeline
     projectType: r.projectType,
     hoursPerWeek: r.hoursPerWeek ?? r.hoursPerDay * WORKING_DAYS_PER_WEEK,
     hoursPerDay: r.hoursPerDay,
-    autoScore: r.autoScore,
   }));
 }
 

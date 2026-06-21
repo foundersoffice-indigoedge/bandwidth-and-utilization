@@ -4,9 +4,11 @@ import { cycles, conflicts, submissions, conflictRemindersSent, directorSignoffs
 import { eq, and, desc, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { sendConflictReminderEmail, sendDirectorSignoffReminderEmail } from '@/lib/email';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
-
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Weekly anchor and the sign-off nudge interval are workflow config (re-inlined from rules store).
+// The IST same-day logic stays in code.
 const REMINDERS_START_DATE = '2026-04-27';
+const SIGNOFF_NUDGE_HOURS = 24;
 
 function isSameIstDay(a: Date | null, b: Date): boolean {
   if (!a) return false;
@@ -154,7 +156,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Signoff reminders — daily nudge for open signoffs (status='email_sent', no reminder yet or >24h ago)
-  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const twentyFourHoursAgo = new Date(Date.now() - SIGNOFF_NUDGE_HOURS * 60 * 60 * 1000);
   const openSignoffs = await db
     .select()
     .from(directorSignoffs)

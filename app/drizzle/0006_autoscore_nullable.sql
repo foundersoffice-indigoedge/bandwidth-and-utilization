@@ -1,0 +1,1 @@
+ALTER TABLE "submissions" ALTER COLUMN "auto_score" DROP NOT NULL;

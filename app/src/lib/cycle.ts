@@ -3,7 +3,7 @@ import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } f
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
-import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
+import { sendCollectionEmail, sendCompletionEmail, sendPeerBandwidthEmails, type FellowSummary } from '@/lib/email';
 import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
@@ -227,7 +227,6 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       return {
         projectName: s.projectName,
         projectType: s.projectType as ProjectType,
-        score: s.autoScore,
         hoursPerDay: s.hoursPerDay,
         hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
         isVpRun: proj?.isVpRun,
@@ -257,8 +256,8 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     });
   }
 
-  // Mark cycle complete
-  await db.update(cycles).set({ status: 'complete' as const }).where(eq(cycles.id, cycleId));
+  // Mark cycle complete (atomically set peerEmailsSent to false initially; updated below on success)
+  await db.update(cycles).set({ status: 'complete' as const, peerEmailsSent: false }).where(eq(cycles.id, cycleId));
 
   // Send completion email
   const conflictCount = (
@@ -274,4 +273,15 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     conflictCount,
     fellowSummaries
   );
+
+  // Peer bandwidth-visibility emails (gated by env flag)
+  const enabledFrom = process.env.PEER_EMAIL_ENABLED_FROM;
+  if (enabledFrom && cycle.startDate >= enabledFrom && !cycle.peerEmailsSent) {
+    try {
+      await sendPeerBandwidthEmails(allSubmissions, fellows, allProjects, cycle.startDate);
+      await db.update(cycles).set({ peerEmailsSent: true }).where(eq(cycles.id, cycleId));
+    } catch (e) {
+      console.error('peer bandwidth emails failed', e);
+    }
+  }
 }

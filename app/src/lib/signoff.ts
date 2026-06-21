@@ -7,6 +7,7 @@ import { sendDirectorSignoffEmail, sendDirectorFlagResolutionEmail } from './ema
 import { computeResolverForFlag, dedupeRecipients } from './director-flag';
 import { postDirectorFlagToSlack } from './slack';
 import { formatDateRange } from './schedule';
+import { WORKING_DAYS_PER_WEEK } from './scoring';
 import { randomUUID } from 'crypto';
 import type { ProjectAssignment, SignoffProjectGroup } from '@/types';
 
@@ -110,7 +111,7 @@ export function buildSignoffGroups(
         fellowName: f?.name ?? 'Unknown',
         designation: f?.designation ?? 'Unknown',
         hoursPerDay: s.hoursPerDay,
-        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * 6,
+        hoursPerWeek: s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK,
       };
     });
 

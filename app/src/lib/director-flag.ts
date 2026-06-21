@@ -1,3 +1,5 @@
+import { getStringList } from 'ie-agent-rules';
+
 export interface FellowMinimal {
   recordId: string;
   designation: string;
@@ -19,7 +21,7 @@ export interface ResolverResult {
 }
 
 function isVpOrAvp(designation: string): boolean {
-  return designation === 'VP' || designation === 'AVP';
+  return getStringList('utilization-mis.vocab.vp-avp').includes(designation);
 }
 
 /**

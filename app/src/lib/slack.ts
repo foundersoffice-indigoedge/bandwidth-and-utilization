@@ -1,3 +1,5 @@
+import { TYPE_LABELS } from './templates';
+
 export async function postToSlack(text: string): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) return;
@@ -52,7 +54,7 @@ export async function postDirectorFlagToSlack(params: {
   if (flags.length === 0) return;
 
   const lines = flags.map(f => {
-    const typeLabel = f.projectType === 'mandate' ? 'Mandate' : f.projectType === 'dde' ? 'DDE' : 'Pitch';
+    const typeLabel = TYPE_LABELS[f.projectType];
     const proposed = f.proposedHoursPerDay !== null
       ? `${f.proposedHoursPerDay.toFixed(2)} hrs/day`
       : 'no proposed value';
@@ -85,7 +87,7 @@ export async function postNewProject(
   submitterUtilizationPct: number,
   teammateBandwidth: Array<{ name: string; hoursPerWeek: number }>
 ): Promise<void> {
-  const typeLabel = projectType === 'mandate' ? 'Mandate' : projectType === 'dde' ? 'DDE' : 'Pitch';
+  const typeLabel = TYPE_LABELS[projectType];
   const teammateList = teammateNames.length > 0 ? teammateNames.join(', ') : '—';
   const pctInt = Math.round(submitterUtilizationPct * 100);
 
