@@ -1,5 +1,7 @@
 # Current Process: Bandwidth Tracking at IndigoEdge
 
+> ⚠️ **RETIRED (June 2026).** This documents the *old* meeting-driven, Airtable-native bandwidth process, which has been replaced by the Utilization MIS app (email + web form → Postgres → dashboards). The Airtable pipeline it describes (the `… Bandwidth Situation` fields, the `… Project Plan` rollups, the `Bandwidth of Fellow` AI field on Fellows List) was deleted in the June 2026 cleanup. Kept here as a historical record of the as-was process; do not treat any of it as current.
+>
 > Documents the as-is bandwidth tracking process. Written as a reference for designing the automated replacement.
 > **Created:** 2026-04-06
 
