@@ -1,4 +1,4 @@
-import { getNumber } from 'ie-agent-rules';
+import { getNumber } from 'ie-ai-rulebook';
 import type { HoursUnit } from '@/types';
 
 // Working days per week is a governed rule (utilization-mis.calc.*).

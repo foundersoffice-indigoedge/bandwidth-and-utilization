@@ -1,6 +1,6 @@
 import { fetchAllRecords } from './client';
 import { FELLOWS_TABLE_ID } from './config';
-import { getStringList, getString, getStringMap } from 'ie-agent-rules';
+import { getStringList, getString, getStringMap } from 'ie-ai-rulebook';
 import type { AirtableRecord } from './client';
 import type { Fellow } from '@/types';
 

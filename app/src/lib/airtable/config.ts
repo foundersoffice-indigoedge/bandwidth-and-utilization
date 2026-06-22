@@ -4,7 +4,7 @@ import {
   getVpRunFlag,
   getNameField,
   getStageRule,
-} from 'ie-agent-rules';
+} from 'ie-ai-rulebook';
 import type { ProjectType } from '@/types';
 
 // Every Airtable field reference here is derived from the rules store, not

@@ -1,4 +1,4 @@
-import { getStringList } from 'ie-agent-rules';
+import { getStringList } from 'ie-ai-rulebook';
 
 export type Tier = 'VP' | 'AVP' | 'Associate' | 'Analyst';
 

@@ -1,4 +1,4 @@
-import { getNumber, loadTagFromBands } from 'ie-agent-rules';
+import { getNumber, loadTagFromBands } from 'ie-ai-rulebook';
 import type { LoadTag } from '@/types';
 
 // Weekly capacity and the load-tag bands are governed rules
