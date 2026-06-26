@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-06-22 (Phases 1a/1b/2 shipped; Phase 4 engine migration done, both apps on ie-ai-rulebook v0.6.0)
+> **Last updated:** 2026-06-26 (peer email decoupled onto Tue/Wed time trigger; shipped to prod)
 
 ## Instructions for Claude
 
@@ -17,6 +17,8 @@
 ---
 
 ## Current Focus
+
+**UPDATE (2026-06-26): Peer bandwidth email decoupled from director sign-off onto a Tue/Wed IST time trigger — shipped to prod.** Directors routinely never signed off, so `finalizeCycle` never fired and the peer email (its last step) never went out. New dedicated cron `/api/cron/peer-email` owns the send: Tue 10:00/14:00/17:00 IST it goes out at the first checkpoint where all tokens are in AND no conflicts are open; Wed 09:00 IST it goes out unconditionally and names who hasn't filled. Sign-off renders as a "pending" banner instead of gating. Cycle finalization (snapshots + completion email) still waits on sign-off, unchanged. The Slack pending-list now posts daily Tue–Fri 09:00 IST to #team-allocation (was Wed-onward). Hardened across two Codex review rounds (atomic `peerEmailsSent` claim, token-derived "not yet submitted", deterministic cycle lookup). Merged to `main` (`aa0c570`), deployed; 212 tests green. Full rationale in the 2026-06-26 Activity Log entry and MEMORY decision.
 
 **UPDATE (2026-06-22): Phases 1a, 1b, and 2 are now DEPLOYED, and the Phase 4 engine migration is DONE.** The "built / not deployed" and "DEPLOY CAVEAT" notes below are superseded. `cleanup/rules-rationalization` shipped to prod (migrations `0006` and `0007` applied to Neon first), the peer bandwidth email is enabled from the 2026-06-15 cycle, and Util MIS now runs on `ie-ai-rulebook` v0.6.0 (`e6aadd8`). Full details in the 2026-06-22 Activity Log entry. The old engine stays as rollback pending a clean cron bake (verification scheduled 2026-06-23).
 
@@ -110,6 +112,7 @@ Three commits on the branch:
 | 2026-06-19 | Phase 2: New peer bandwidth-visibility email (commit `af7e102`, branch `cleanup/rules-rationalization`). Fires after each cycle finalizes. Each eligible fellow sees every teammate sharing ≥1 project with them: total load (hrs + %/84h + load tag) + all their projects, shared ones marked. Directors excluded entirely. Gated behind `PEER_EMAIL_ENABLED_FROM` (unset = never fires); idempotent via `cycles.peer_emails_sent` (migration `0007`). Pure assembly in `src/lib/peer-bandwidth.ts`, 6 unit tests; `scripts/peer-email-sample.ts` for review. Design approved by Ajder via rendered sample (2026-06-19). tsc clean, 190 tests green. |
 | 2026-06-21 | No Util MIS changes. ie-checkin Phase 3 (ROADMAP data-quality Jobs E, A, B) now underway on separate branches — see Project Tracking System tracker. Util MIS Phases 1a+1b+2 (`cleanup/rules-rationalization`) remain built-but-unshipped. Deploy reminder: apply migration `0006` directly to Neon before deploy; peer emails stay off until `PEER_EMAIL_ENABLED_FROM` is set. |
 | 2026-06-22 | Rules-rationalization Phases 1a/1b/2 SHIPPED, and the Phase 4 engine migration is done. (1) Merged `cleanup/rules-rationalization` to `main` and deployed to prod (workflow rules re-inlined, dead score-curve removed, peer bandwidth email); applied migrations `0006` (auto_score nullable) and `0007` (peer_emails_sent) directly to Neon first. (2) Enabled the peer bandwidth email via `PEER_EMAIL_ENABLED_FROM` from the 2026-06-15 cycle; first sends fire on the 2026-06-22 finalize. (3) Migrated Util MIS off `ie-agent-rules` onto `ie-ai-rulebook` v0.6.0 (`e6aadd8`), a parity-verified byte-identical swap; 190 tests green; deployed off-cycle from the repo root (Vercel Root Directory = app). `origin/main` at `e6aadd8`. Old engine stays published for rollback pending a clean cron bake. |
+| 2026-06-26 | Peer bandwidth email decoupled from director sign-off onto a Tue/Wed IST time trigger, and shipped to prod. New cron `/api/cron/peer-email` (4 schedules: Tue 10:00/14:00/17:00 + Wed 09:00 IST) owns the send; Tuesday is conditional on all tokens submitted AND no open conflicts, Wednesday is the unconditional floor that names non-submitters. Sign-off no longer gates — it's a "pending" banner (plus a conflicts banner on the Wednesday floor); non-submitters render as "Not yet submitted" from `tokens.status='pending'`. Peer send removed from `finalizeCycle`; `getSignoffState` extracted and shared with the finalize gate; pure logic split into `peer-email-schedule.ts` + `signoff-scope.ts`. Idempotent via an atomic `peer_emails_sent` claim (the old `peerEmailsSent: false` reset on finalize — a latent double-send bug — was removed). Slack pending-list now posts daily Tue–Fri 09:00 IST (dropped the Wed-onward gate). TDD'd: 16 new tests, 212 green; `tsc --noEmit` + eslint clean. Reviewed by Codex twice (plan + diff), both rounds' findings folded in. Branch `feat/peer-email-time-trigger` → merged `main` (`aa0c570`), deployed to prod. No migration (reuses `cycles.peer_emails_sent`). |
 
 ---
 
