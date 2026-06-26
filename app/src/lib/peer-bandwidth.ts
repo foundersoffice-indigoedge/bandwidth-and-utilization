@@ -23,6 +23,8 @@ export interface PeerProjectRow {
   shared: boolean;
 }
 
+export type SubmissionStatus = 'submitted' | 'pending';
+
 export interface PeerTeammateModel {
   recordId: string;
   name: string;
@@ -31,6 +33,8 @@ export interface PeerTeammateModel {
   utilization: number;
   tag: LoadTag;
   projects: PeerProjectRow[];
+  /** 'pending' when this fellow has not yet submitted bandwidth for the cycle. */
+  submissionStatus: SubmissionStatus;
 }
 
 export interface PeerEmailModel {
@@ -41,8 +45,12 @@ export interface PeerEmailModel {
     totalHoursPerWeek: number;
     utilization: number;
     tag: LoadTag;
+    /** 'pending' when the recipient themselves has not yet submitted. */
+    submissionStatus: SubmissionStatus;
   };
   teammates: PeerTeammateModel[];
+  /** Cycle-level list of eligible fellows who have not submitted (sorted by name). Same on every model. */
+  pendingFellowNames: string[];
   dateRange: string;
 }
 
@@ -77,12 +85,17 @@ interface SubmissionRow {
  * @param fellows         Eligible fellows (director-free; from fetchEligibleFellows).
  * @param allProjects     All ProjectAssignment rows (from fetchAllProjects).
  * @param dateRange       Human-readable date string, e.g. "Apr 27 – May 3, 2026".
+ * @param pendingFellowIds Record IDs of fellows whose cycle token is still 'pending'.
+ *   This is the source of truth for "not yet submitted" — NOT the absence of
+ *   submissions — so fellows with no token (no active projects) or marked
+ *   `not_needed` are never falsely flagged. Defaults to empty (nobody pending).
  */
 export function assemblePeerBandwidthData(
   allSubmissions: SubmissionRow[],
   fellows: Fellow[],
   allProjects: ProjectAssignment[],
   dateRange: string,
+  pendingFellowIds: Set<string> = new Set(),
 ): PeerEmailModel[] {
   const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
   const eligibleIds = new Set(fellows.map(f => f.recordId));
@@ -94,6 +107,7 @@ export function assemblePeerBandwidthData(
     tag: LoadTag;
     projectRecordIds: Set<string>;
     projects: PeerProjectRow[];
+    submissionStatus: SubmissionStatus;
   }
 
   const fellowLoads = new Map<string, FellowLoad>();
@@ -102,6 +116,7 @@ export function assemblePeerBandwidthData(
     const selfSubs = allSubmissions.filter(
       s => s.isSelfReport && s.fellowRecordId === fellow.recordId,
     );
+    const submissionStatus: SubmissionStatus = pendingFellowIds.has(fellow.recordId) ? 'pending' : 'submitted';
 
     const projects: PeerProjectRow[] = selfSubs.map(s => {
       const proj = allProjects.find(p => p.projectRecordId === s.projectRecordId);
@@ -124,8 +139,15 @@ export function assemblePeerBandwidthData(
       tag: getLoadTag(util),
       projectRecordIds: new Set(projects.map(p => p.projectRecordId)),
       projects,
+      submissionStatus,
     });
   }
+
+  // Cycle-level list of eligible fellows with a pending token (sorted by name).
+  const pendingFellowNames = fellows
+    .filter(f => pendingFellowIds.has(f.recordId))
+    .map(f => f.name)
+    .sort((a, b) => a.localeCompare(b));
 
   // --- Build teammate graph ---
   // Two eligible fellows are teammates iff they co-occur in (vpAvpIds ∪ associateIds)
@@ -180,6 +202,7 @@ export function assemblePeerBandwidthData(
         utilization: tmLoad.utilization,
         tag: tmLoad.tag,
         projects: tmProjects,
+        submissionStatus: tmLoad.submissionStatus,
       };
     });
 
@@ -197,8 +220,10 @@ export function assemblePeerBandwidthData(
         totalHoursPerWeek: recipientLoad.totalHoursPerWeek,
         utilization: recipientLoad.utilization,
         tag: recipientLoad.tag,
+        submissionStatus: recipientLoad.submissionStatus,
       },
       teammates: teammateModels,
+      pendingFellowNames,
       dateRange,
     });
   }
@@ -232,23 +257,71 @@ const TYPE_LABELS: Record<string, string> = {
 /**
  * Build inline-HTML email for a single recipient's peer bandwidth snapshot.
  * Per-week numbers only.
+ *
+ * @param opts.signoffPending   When true, prepend a "director sign-off pending"
+ *   banner (figures are self-reported and may change). Set by the time-trigger
+ *   when the email goes out before directors have signed off.
+ * @param opts.conflictsPending When true, prepend a "figures still under
+ *   resolution" banner — used on the Wednesday fallback, which can send while
+ *   VP/self bandwidth conflicts are still open.
  */
-export function buildPeerBandwidthEmailHtml(model: PeerEmailModel, dateRange: string): string {
-  const { recipient, teammates } = model;
-  const recipientPct = Math.round(recipient.utilization * 100);
-  const recipientHpw = recipient.totalHoursPerWeek.toFixed(1);
+export function buildPeerBandwidthEmailHtml(
+  model: PeerEmailModel,
+  dateRange: string,
+  opts: { signoffPending?: boolean; conflictsPending?: boolean } = {},
+): string {
+  const { recipient, teammates, pendingFellowNames } = model;
 
-  // Recipient load strip
-  const recipientStrip = `
+  // Banners (sign-off pending + open conflicts + still-awaiting-submissions), shown when relevant.
+  const banners: string[] = [];
+  if (opts.signoffPending) {
+    banners.push(`
+    <div style="background:#fffbeb;padding:12px 16px;border-radius:8px;border-left:4px solid #d97706;margin:16px 0">
+      <p style="margin:0;font-size:13px;color:#92400e"><strong>Director sign-off still pending.</strong> These figures are self-reported and may change once directors review.</p>
+    </div>`);
+  }
+  if (opts.conflictsPending) {
+    banners.push(`
+    <div style="background:#fffbeb;padding:12px 16px;border-radius:8px;border-left:4px solid #d97706;margin:16px 0">
+      <p style="margin:0;font-size:13px;color:#92400e">Some bandwidth figures are still under resolution and may change.</p>
+    </div>`);
+  }
+  if (pendingFellowNames.length > 0) {
+    banners.push(`
+    <div style="background:#fef2f2;padding:12px 16px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0">
+      <p style="margin:0;font-size:13px;color:#991b1b">Still awaiting bandwidth from: <strong>${pendingFellowNames.join(', ')}</strong>. Their load isn't reflected below yet.</p>
+    </div>`);
+  }
+  const bannerBlock = banners.join('');
+
+  // Recipient load strip — or a "you haven't submitted" notice if they're pending.
+  const recipientStrip = recipient.submissionStatus === 'pending'
+    ? `
+    <div style="background:#fef2f2;padding:14px 18px;border-radius:8px;border-left:4px solid #dc2626;margin:16px 0">
+      <p style="margin:0;font-size:14px;font-weight:600;color:#991b1b">${recipient.name}</p>
+      <p style="margin:6px 0 0;font-size:14px;color:#991b1b">You haven't submitted your bandwidth for this week yet.</p>
+    </div>`
+    : `
     <div style="background:#f0f9ff;padding:14px 18px;border-radius:8px;border-left:4px solid #2563eb;margin:16px 0">
       <p style="margin:0;font-size:14px;font-weight:600;color:#1e40af">${recipient.name}</p>
       <p style="margin:6px 0 0;font-size:14px;color:#374151">
-        ${recipientHpw} hrs/wk &middot; ${recipientPct}% of ${WEEKLY_CAPACITY_HOURS}h &middot; ${tagBadge(recipient.tag)}
+        ${recipient.totalHoursPerWeek.toFixed(1)} hrs/wk &middot; ${Math.round(recipient.utilization * 100)}% of ${WEEKLY_CAPACITY_HOURS}h &middot; ${tagBadge(recipient.tag)}
       </p>
     </div>`;
 
   // Teammate blocks
   const teammateBlocks = teammates.map(tm => {
+    // Pending teammate: compact "not yet submitted" card, no fabricated load/table.
+    if (tm.submissionStatus === 'pending') {
+      return `
+      <div style="margin:24px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <div style="background:#f9fafb;padding:12px 16px">
+          <p style="margin:0;font-size:14px;font-weight:600;color:#111827">${tm.name} <span style="font-size:12px;color:#6b7280;font-weight:400">(${tm.designation})</span></p>
+          <p style="margin:4px 0 0;font-size:13px;color:#991b1b">Not yet submitted</p>
+        </div>
+      </div>`;
+    }
+
     const tmPct = Math.round(tm.utilization * 100);
     const tmHpw = tm.totalHoursPerWeek.toFixed(1);
 
@@ -287,6 +360,7 @@ export function buildPeerBandwidthEmailHtml(model: PeerEmailModel, dateRange: st
   return `
     <p>Hi ${recipient.name},</p>
     <p>Here's a snapshot of your teammates' projected load for the week of <strong>${dateRange}</strong>. Shared projects are highlighted.</p>
+    ${bannerBlock}
     <p style="font-weight:700;font-size:14px;margin:24px 0 4px;color:#1f2937">Your projected load</p>
     ${recipientStrip}
     <p style="font-weight:700;font-size:14px;margin:24px 0 4px;color:#1f2937">Your teammates this week</p>

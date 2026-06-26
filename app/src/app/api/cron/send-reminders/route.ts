@@ -8,10 +8,10 @@ import { postPendingList } from '@/lib/slack';
 import { getCycleEndDate } from '@/lib/schedule';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Cadence is workflow config (re-inlined from rules store): which weekdays skip reminders,
-// and the earliest weekday the pending-list goes to Slack.
+// Cadence is workflow config (re-inlined from rules store): which weekdays skip reminders.
+// The Slack pending-list posts on every reminder run (daily 09:00 IST, Tue–Fri) so
+// #team-allocation sees who hasn't filled each morning, not just from Wednesday on.
 const REMINDER_SKIP_DAYS = [0, 6, 1];
-const SLACK_PENDING_FROM_DAY = 3;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization');
@@ -48,19 +48,18 @@ export async function GET(req: NextRequest) {
     await sleep(500);
   }
 
-  if (dayOfWeek >= SLACK_PENDING_FROM_DAY) {
-    const startDate = new Date(cycle.startDate);
-    const endDate = getCycleEndDate(startDate);
-    const dateRange = `${startDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  // Post the pending list to #team-allocation on every reminder run.
+  const startDate = new Date(cycle.startDate);
+  const endDate = getCycleEndDate(startDate);
+  const dateRange = `${startDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} – ${endDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
-    await postPendingList(
-      pendingTokens.map(t => t.fellowName),
-      dateRange
-    );
-  }
+  await postPendingList(
+    pendingTokens.map(t => t.fellowName),
+    dateRange
+  );
 
   return NextResponse.json({
     message: `Reminders sent to ${pendingTokens.length} fellows`,
-    slackPosted: dayOfWeek >= SLACK_PENDING_FROM_DAY,
+    slackPosted: true,
   });
 }

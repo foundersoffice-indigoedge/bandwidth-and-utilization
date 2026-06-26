@@ -13,6 +13,22 @@
     {
       "path": "/api/cron/conflict-reminders",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/peer-email",
+      "schedule": "30 4 * * 2"
+    },
+    {
+      "path": "/api/cron/peer-email",
+      "schedule": "30 8 * * 2"
+    },
+    {
+      "path": "/api/cron/peer-email",
+      "schedule": "30 11 * * 2"
+    },
+    {
+      "path": "/api/cron/peer-email",
+      "schedule": "30 3 * * 3"
     }
   ]
 }

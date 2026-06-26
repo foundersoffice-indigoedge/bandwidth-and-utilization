@@ -496,9 +496,15 @@ export async function sendCompletionEmail(
 // --- Peer Bandwidth-Visibility Emails ---
 
 /**
- * Send per-recipient peer bandwidth snapshots to all eligible fellows
- * who have at least one teammate. No CC. Returns the count of successfully
- * sent emails — a single recipient failure is logged but does not abort the rest.
+ * Send per-recipient peer bandwidth snapshots to all eligible fellows who have at
+ * least one teammate. No CC. A single recipient failure is logged but does not
+ * abort the rest. Throttled (~2/sec) to stay under Resend's rate limit.
+ *
+ * @param pendingFellowIds  Record IDs of fellows whose token is still 'pending'
+ *   (source of truth for "not yet submitted").
+ * @param opts.signoffPending    Show a "director sign-off pending" banner.
+ * @param opts.conflictsPending  Show a "figures still under resolution" banner.
+ * @returns counts so the caller can decide whether the batch is healthy.
  */
 export async function sendPeerBandwidthEmails(
   allSubmissions: {
@@ -513,24 +519,33 @@ export async function sendPeerBandwidthEmails(
   fellows: Fellow[],
   allProjects: import('@/types').ProjectAssignment[],
   startDate: string,
-): Promise<number> {
+  pendingFellowIds: Set<string>,
+  opts: { signoffPending?: boolean; conflictsPending?: boolean } = {},
+): Promise<{ attempted: number; sent: number; failed: number }> {
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   const dateRange = formatDateRange(startDate);
-  const models = assemblePeerBandwidthData(allSubmissions, fellows, allProjects, dateRange);
+  const models = assemblePeerBandwidthData(allSubmissions, fellows, allProjects, dateRange, pendingFellowIds);
 
   let sent = 0;
+  let failed = 0;
   for (const model of models) {
     try {
       await sendEmail({
         from,
         to: overrideTo(model.recipient.email),
         subject: `Team Bandwidth — week of ${dateRange}`,
-        html: buildPeerBandwidthEmailHtml(model, dateRange),
+        html: buildPeerBandwidthEmailHtml(model, dateRange, {
+          signoffPending: opts.signoffPending,
+          conflictsPending: opts.conflictsPending,
+        }),
       });
       sent++;
     } catch (err) {
+      failed++;
       console.error(`peer bandwidth email failed for ${model.recipient.name} (${model.recipient.email}):`, err);
     }
+    await sleep(500);
   }
 
-  return sent;
+  return { attempted: models.length, sent, failed };
 }

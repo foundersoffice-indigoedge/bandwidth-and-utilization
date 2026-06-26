@@ -3,7 +3,8 @@ import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } f
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
-import { sendCollectionEmail, sendCompletionEmail, sendPeerBandwidthEmails, type FellowSummary } from '@/lib/email';
+import { getExpectedDirectorIds } from '@/lib/signoff-scope';
+import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
@@ -73,24 +74,35 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
 
   if (pendingConflicts.length > 0) return;
 
-  // Third gate: every current Director who has ≥1 in-scope project this cycle must
-  // have a director_signoffs row in a terminal state (confirmed or flagged_resolved).
-  // A project is "in scope" if it has ≥1 team member (matches getDirectorSliceStatus).
-  // Resolve via fetchDirectors so the gate ignores both ex-directors and VPs that
-  // happen to appear in an Airtable project's director field — neither category
-  // produces a sign-off, so neither should block finalization.
+  // Third gate: every current Director with ≥1 staffed project this cycle must have
+  // a terminal sign-off (confirmed or flagged_resolved). Shared with the peer-email
+  // banner via getSignoffState so both agree on who's expected.
   const [allProjects, currentDirectors] = await Promise.all([
     fetchAllProjects(),
     fetchDirectors(),
   ]);
-  const currentDirectorIds = new Set(currentDirectors.map(f => f.recordId));
-  const expectedDirectorIds = new Set<string>();
-  for (const p of allProjects) {
-    if (p.vpAvpIds.length + p.associateIds.length === 0) continue;
-    for (const dirId of p.directorIds) {
-      if (currentDirectorIds.has(dirId)) expectedDirectorIds.add(dirId);
-    }
-  }
+  const signoffState = await getSignoffState(cycleId, allProjects, currentDirectors);
+  if (signoffState === 'pending') return;
+
+  await finalizeCycle(cycleId);
+}
+
+export type SignoffState = 'not_required' | 'pending' | 'complete';
+
+/**
+ * Sign-off status for a cycle: 'not_required' when no current director has a
+ * staffed project, 'pending' when at least one expected director still lacks a
+ * terminal sign-off, else 'complete'. Used by both the finalize gate above and
+ * the peer-email "sign-off pending" banner.
+ */
+export async function getSignoffState(
+  cycleId: string,
+  allProjects: Awaited<ReturnType<typeof fetchAllProjects>>,
+  currentDirectors: Awaited<ReturnType<typeof fetchDirectors>>,
+): Promise<SignoffState> {
+  const currentDirectorIds = new Set(currentDirectors.map(d => d.recordId));
+  const expected = getExpectedDirectorIds(allProjects, currentDirectorIds);
+  if (expected.size === 0) return 'not_required';
 
   const cycleSignoffs = await db
     .select()
@@ -100,12 +112,11 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
   const terminal = new Set(['confirmed', 'flagged_resolved']);
   const signoffByDirector = new Map(cycleSignoffs.map(s => [s.directorFellowId, s.status]));
 
-  for (const dirId of expectedDirectorIds) {
+  for (const dirId of expected) {
     const s = signoffByDirector.get(dirId);
-    if (!s || !terminal.has(s)) return;
+    if (!s || !terminal.has(s)) return 'pending';
   }
-
-  await finalizeCycle(cycleId);
+  return 'complete';
 }
 
 export async function finalizeStaleCycles(): Promise<string[]> {
@@ -256,8 +267,11 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     });
   }
 
-  // Mark cycle complete (atomically set peerEmailsSent to false initially; updated below on success)
-  await db.update(cycles).set({ status: 'complete' as const, peerEmailsSent: false }).where(eq(cycles.id, cycleId));
+  // Mark cycle complete. NOTE: peerEmailsSent is intentionally NOT reset here.
+  // The peer bandwidth email is decoupled onto a time trigger (/api/cron/peer-email,
+  // Tue/Wed IST) and owns that flag. Resetting it here would let the Wednesday cron
+  // re-send if a director signs off and finalizes after Tuesday's peer email went out.
+  await db.update(cycles).set({ status: 'complete' as const }).where(eq(cycles.id, cycleId));
 
   // Send completion email
   const conflictCount = (
@@ -273,15 +287,4 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     conflictCount,
     fellowSummaries
   );
-
-  // Peer bandwidth-visibility emails (gated by env flag)
-  const enabledFrom = process.env.PEER_EMAIL_ENABLED_FROM;
-  if (enabledFrom && cycle.startDate >= enabledFrom && !cycle.peerEmailsSent) {
-    try {
-      await sendPeerBandwidthEmails(allSubmissions, fellows, allProjects, cycle.startDate);
-      await db.update(cycles).set({ peerEmailsSent: true }).where(eq(cycles.id, cycleId));
-    } catch (e) {
-      console.error('peer bandwidth emails failed', e);
-    }
-  }
 }

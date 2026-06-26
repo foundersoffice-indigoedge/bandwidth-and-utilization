@@ -131,3 +131,77 @@ describe('assemblePeerBandwidthData', () => {
     expect(bobAsTeammate.projects[1].shared).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Submission status + pending list (Wednesday fallback: mark who hasn't filled)
+// ---------------------------------------------------------------------------
+
+describe('assemblePeerBandwidthData submission status', () => {
+  const fellowP: Fellow = { recordId: 'rP', name: 'Priya', email: 'priya@ie.com', designation: 'VP' };
+  const fellowQ: Fellow = { recordId: 'rQ', name: 'Quentin', email: 'quentin@ie.com', designation: 'Associate 1' };
+  const statusFellows = [fellowP, fellowQ];
+
+  const statusProjects = [
+    {
+      projectRecordId: 'pX',
+      projectName: 'Proj Xray',
+      projectType: 'mandate' as const,
+      stage: 'Shortlisting',
+      vpAvpIds: ['rP'],
+      associateIds: ['rQ'],
+      directorIds: ['rDIR'],
+      isVpRun: false,
+    },
+  ];
+
+  // Only Priya self-reports; Quentin never submitted.
+  const statusSubmissions = [
+    { fellowRecordId: 'rP', projectRecordId: 'pX', projectName: 'Proj Xray', projectType: 'mandate', hoursPerWeek: 20, hoursPerDay: 20 / 6, isSelfReport: true },
+  ];
+
+  // Status is driven by the cycle's pending TOKENS (passed as a Set of fellow ids),
+  // NOT by absence of submissions — so people with no active projects (no token) or
+  // toggled `not_needed` are never falsely flagged "Not yet submitted".
+  const pendingQuentin = new Set(['rQ']);
+
+  it("marks a fellow with a pending token as 'pending'", () => {
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', pendingQuentin);
+    const priyaModel = result.find(m => m.recipient.recordId === 'rP')!;
+    const quentinAsTeammate = priyaModel.teammates.find(t => t.recordId === 'rQ')!;
+    expect(quentinAsTeammate.submissionStatus).toBe('pending');
+  });
+
+  it("marks a fellow without a pending token as 'submitted'", () => {
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', pendingQuentin);
+    const quentinModel = result.find(m => m.recipient.recordId === 'rQ')!;
+    const priyaAsTeammate = quentinModel.teammates.find(t => t.recordId === 'rP')!;
+    expect(priyaAsTeammate.submissionStatus).toBe('submitted');
+  });
+
+  it('marks the recipient pending when the recipient has a pending token', () => {
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', pendingQuentin);
+    const quentinModel = result.find(m => m.recipient.recordId === 'rQ')!;
+    expect(quentinModel.recipient.submissionStatus).toBe('pending');
+    const priyaModel = result.find(m => m.recipient.recordId === 'rP')!;
+    expect(priyaModel.recipient.submissionStatus).toBe('submitted');
+  });
+
+  it('exposes pendingFellowNames from the pending-token set', () => {
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', pendingQuentin);
+    expect(result[0].pendingFellowNames).toEqual(['Quentin']);
+  });
+
+  it('leaves pendingFellowNames empty when no token is pending', () => {
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', new Set());
+    expect(result[0].pendingFellowNames).toEqual([]);
+  });
+
+  it('does not flag a teammate with no submission but no pending token (e.g. not_needed)', () => {
+    // Quentin has no submission, but is NOT in the pending set → treated as submitted.
+    const result = assemblePeerBandwidthData(statusSubmissions, statusFellows, statusProjects, 'Apr 27 – May 3, 2026', new Set());
+    const priyaModel = result.find(m => m.recipient.recordId === 'rP')!;
+    const quentinAsTeammate = priyaModel.teammates.find(t => t.recordId === 'rQ')!;
+    expect(quentinAsTeammate.submissionStatus).toBe('submitted');
+    expect(priyaModel.pendingFellowNames).toEqual([]);
+  });
+});
