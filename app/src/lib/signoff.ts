@@ -9,6 +9,7 @@ import { postDirectorFlagToSlack } from './slack';
 import { formatDateRange } from './schedule';
 import { WORKING_DAYS_PER_WEEK } from './scoring';
 import { randomUUID } from 'crypto';
+import { flagHasContent } from './flag-validity';
 import type { ProjectAssignment, SignoffProjectGroup } from '@/types';
 
 export interface SliceInput {
@@ -260,6 +261,9 @@ export interface SubmitFlagsResult {
   flagsProcessed: number;
 }
 
+// Single source of truth for flag validity; shared with the client form.
+export { flagHasContent };
+
 /**
  * Transactionally: flip the signoff to 'flagged', insert one director_flag conflicts
  * row per flag, then post to Slack and send resolution emails (post-commit side effects).
@@ -272,14 +276,10 @@ export async function submitFlags(params: {
 
   if (flags.length === 0) throw new Error('At least one flag required');
 
-  // Validate each flag has a proposed value (required); comment is optional
+  // Each flag must carry a proposed value (0 or more) or a comment.
   for (const f of flags) {
-    const hasValue =
-      typeof f.proposedHoursPerDay === 'number' &&
-      !Number.isNaN(f.proposedHoursPerDay) &&
-      f.proposedHoursPerDay > 0;
-    if (!hasValue) {
-      throw new Error(`Flag for submission ${f.submissionId} must include a proposed value (positive number)`);
+    if (!flagHasContent(f)) {
+      throw new Error(`Flag for submission ${f.submissionId} must include a proposed value or a comment`);
     }
   }
 

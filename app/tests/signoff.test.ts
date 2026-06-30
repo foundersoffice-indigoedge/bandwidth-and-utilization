@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getDirectorSliceStatus, createSignoffIfReady, buildSignoffGroups, type SliceInput } from '../src/lib/signoff';
+import { getDirectorSliceStatus, createSignoffIfReady, buildSignoffGroups, flagHasContent, type SliceInput } from '../src/lib/signoff';
 import type { ProjectAssignment } from '../src/types';
 
 const baseProject = (id: string, overrides: Partial<ProjectAssignment> = {}): ProjectAssignment => ({
@@ -235,6 +235,40 @@ describe('createSignoffIfReady — DB integration', () => {
 // ---------------------------------------------------------------------------
 // submitFlags — DB integration tests (skipped until integration infra exists)
 // ---------------------------------------------------------------------------
+
+describe('flagHasContent — flag validity rule', () => {
+  it('accepts a positive proposed value', () => {
+    expect(flagHasContent({ proposedHoursPerDay: 2 })).toBe(true);
+  });
+
+  it('accepts a proposed value of 0 (should be zero / unallocated)', () => {
+    expect(flagHasContent({ proposedHoursPerDay: 0 })).toBe(true);
+  });
+
+  it('accepts a comment with no proposed value (e.g. "not yet decided")', () => {
+    expect(flagHasContent({ comment: 'Allocation is not yet decided' })).toBe(true);
+  });
+
+  it('accepts a value of 0 together with a comment', () => {
+    expect(flagHasContent({ proposedHoursPerDay: 0, comment: 'Allocation is not yet decided' })).toBe(true);
+  });
+
+  it('rejects neither value nor comment', () => {
+    expect(flagHasContent({})).toBe(false);
+  });
+
+  it('rejects a blank/whitespace-only comment with no value', () => {
+    expect(flagHasContent({ comment: '   ' })).toBe(false);
+  });
+
+  it('rejects a negative value with no comment', () => {
+    expect(flagHasContent({ proposedHoursPerDay: -1 })).toBe(false);
+  });
+
+  it('rejects NaN value with no comment', () => {
+    expect(flagHasContent({ proposedHoursPerDay: Number.NaN })).toBe(false);
+  });
+});
 
 describe('submitFlags — DB integration', () => {
   it.skip('inserts conflict rows + flips signoff to flagged within a single transaction', async () => {

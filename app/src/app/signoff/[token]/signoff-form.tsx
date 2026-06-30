@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import type { SignoffProjectGroup } from '@/types';
+import { flagHasContent } from '@/lib/flag-validity';
 
 interface FlagState {
   submissionId: string;
@@ -29,11 +30,17 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
   const [status, setStatus] = useState<'idle' | 'confirming' | 'flagging' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string>('');
 
+  // Match the server rule exactly (lib/flag-validity): a flag is valid with a
+  // proposed value >= 0 OR a non-empty comment.
+  const rowIsValid = (f: FlagState) =>
+    flagHasContent({
+      proposedHoursPerDay: f.proposedHoursPerDay === '' ? undefined : Number(f.proposedHoursPerDay),
+      comment: f.comment,
+    });
+
   const enabledFlags = Object.values(flags).filter(f => f.enabled);
-  const validFlags = enabledFlags.filter(f => {
-    const parsed = Number(f.proposedHoursPerDay);
-    return f.proposedHoursPerDay !== '' && !Number.isNaN(parsed) && parsed > 0;
-  });
+  const validFlags = enabledFlags.filter(rowIsValid);
+  const incompleteFlags = enabledFlags.length - validFlags.length;
 
   async function handleConfirm() {
     if (submitting) return;
@@ -204,13 +211,12 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
                         <td colSpan={5} style={{ padding: 12 }}>
                           <div style={{ marginBottom: 8 }}>
                             <label style={{ fontSize: 13, marginRight: 8 }}>
-                              Proposed correct value:
+                              Proposed correct value (hrs/day):
                             </label>
                             <input
                               type="number"
                               step="0.25"
-                              min="0.01"
-                              required
+                              min="0"
                               value={f.proposedHoursPerDay}
                               onChange={e =>
                                 setFlags(prev => ({
@@ -252,6 +258,11 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
                               placeholder="Optional context for the resolver"
                             />
                           </div>
+                          {!rowIsValid(f) && (
+                            <p style={{ fontSize: 12, color: '#b45309', margin: '8px 0 0' }}>
+                              Enter a value (0 or more) or a comment to include this flag.
+                            </p>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -284,6 +295,17 @@ export function SignoffForm({ token, groups }: { token: string; groups: SignoffP
             ? 'Submitting...'
             : `Submit ${validFlags.length} flag${validFlags.length !== 1 ? 's' : ''}`}
         </button>
+        {incompleteFlags > 0 && (
+          <p style={{ fontSize: 12, color: '#b45309', textAlign: 'center', margin: '8px 0 0' }}>
+            {incompleteFlags} flagged row{incompleteFlags !== 1 ? 's need' : ' needs'} a value (0 or more) or a comment before
+            {incompleteFlags !== 1 ? ' they' : ' it'} can be submitted.
+          </p>
+        )}
+        {enabledFlags.length === 0 && (
+          <p style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', margin: '8px 0 0' }}>
+            Tick a row above to flag it, or use “Confirm all accurate”.
+          </p>
+        )}
       </div>
     </div>
   );
