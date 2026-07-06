@@ -134,11 +134,6 @@ export function SubmissionForm({
                     {project.stage && (
                       <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{project.stage}</span>
                     )}
-                    {project.isVpRun && (
-                      <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
-                        VP-run
-                      </span>
-                    )}
                     {project.performedRoleLabel && (
                       <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
                         {project.performedRoleLabel}

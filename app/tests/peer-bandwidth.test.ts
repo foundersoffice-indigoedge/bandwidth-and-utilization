@@ -207,7 +207,7 @@ describe('assemblePeerBandwidthData submission status', () => {
 });
 
 describe('assemblePeerBandwidthData — performed-role label', () => {
-  it('labels a VP/AVP in an associate slot "acting as Associate" without changing designation', () => {
+  it('labels a VP/AVP in an associate slot "Performing Associate role" without changing designation', () => {
     const otherVp: Fellow = { recordId: 'recOtherVp', name: 'Vik', email: 'vik@ie.com', designation: 'VP' };
     const teammate: Fellow = { recordId: 'recTeammate', name: 'Adit', email: 'adit@ie.com', designation: 'AVP' };
     const localFellows = [otherVp, teammate];
@@ -233,7 +233,7 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .flatMap(m => m.teammates)
       .find(t => t.recordId === 'recTeammate')!
       .projects.find(p => p.projectRecordId === 'recShared')!;
-    expect(teammateRow.performedRoleLabel).toBe('acting as Associate');
+    expect(teammateRow.performedRoleLabel).toBe('Performing Associate role');
 
     const tm = models.flatMap(m => m.teammates).find(t => t.recordId === 'recTeammate')!;
     expect(tm.designation).toBe('AVP'); // designation label unchanged

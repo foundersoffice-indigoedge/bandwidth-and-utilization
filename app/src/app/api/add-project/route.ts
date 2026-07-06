@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             })
             .returning();
 
-          const teammateRoleLabel = isVpOrAvp(teammate.designation) ? 'acting as Associate' : undefined;
+          const teammateRoleLabel = isVpOrAvp(teammate.designation) ? 'Performing Associate role' : undefined;
           const emailId = await sendConflictEmail(
             tokenRecord.fellowName, tokenRecord.fellowEmail,
             teammate.name, teammate.email,

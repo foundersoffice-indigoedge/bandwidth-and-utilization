@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
 
         const assocFellow = fellowMap.get(sub.targetFellowId);
         if (assocFellow) {
-          const assocRoleLabel = isVpOrAvp(assocFellow.designation) ? 'acting as Associate' : undefined;
+          const assocRoleLabel = isVpOrAvp(assocFellow.designation) ? 'Performing Associate role' : undefined;
           const emailId = await sendConflictEmail(
             tokenRecord.fellowName,
             tokenRecord.fellowEmail,
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
               resolutionToken: resToken,
             });
 
-            const selfRoleLabel = isVpOrAvp(tokenRecord.fellowDesignation) ? 'acting as Associate' : undefined;
+            const selfRoleLabel = isVpOrAvp(tokenRecord.fellowDesignation) ? 'Performing Associate role' : undefined;
             const emailId = await sendConflictEmail(
               vpFellow.name,
               vpFellow.email,

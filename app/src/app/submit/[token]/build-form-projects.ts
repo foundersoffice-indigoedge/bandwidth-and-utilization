@@ -1,6 +1,6 @@
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { isVpOrAvp } from '@/lib/airtable/fellows';
-import { resolveProjectRole, determineSeniorId, type MandateRole } from '@/lib/project-role';
+import { resolveProjectRole, type MandateRole } from '@/lib/project-role';
 
 export interface FormProject {
   projectRecordId: string;
@@ -17,7 +17,7 @@ export interface FormProject {
 /** Show a pill only when the mandate role differs from the person's own designation tier. */
 function pillFor(role: MandateRole, designation: string): string | null {
   const actingAssociate = role === 'associate' && isVpOrAvp(designation);
-  return actingAssociate ? 'acting as Associate' : null;
+  return actingAssociate ? 'Performing Associate role' : null;
 }
 
 export function buildFormProjects(
@@ -39,11 +39,9 @@ export function buildFormProjects(
       .filter((f): f is Fellow => f != null)
       .map(f => ({ recordId: f.recordId, name: f.name }));
 
-    // Lead line: the project's senior, computed the same way for every mandate type
-    // (the Airtable `leadFellowName` is only populated for VP-run mandates, so don't rely on it).
-    const seniorId = determineSeniorId(project.vpAvpIds, project.directorIds, isEligible);
-    const leadFellowName = seniorId ? byId.get(seniorId)?.name : undefined;
-
+    // "Led by X" names the lead VP, and only ever shows on VP-run mandates: Airtable
+    // populates `leadFellowName` solely for those. A director-led mandate's lead is the
+    // director, which isn't surfaced on this form — so leave it undefined there.
     return {
       projectRecordId: project.projectRecordId,
       projectName: project.projectName,
@@ -51,7 +49,7 @@ export function buildFormProjects(
       stage: project.stage,
       associates,
       isVpRun: project.isVpRun,
-      leadFellowName,
+      leadFellowName: project.leadFellowName,
       performedRole: role,
       performedRoleLabel: pillFor(role, fellowDesignation),
     };

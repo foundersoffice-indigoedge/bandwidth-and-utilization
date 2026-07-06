@@ -23,7 +23,7 @@ export interface PeerProjectRow {
   hoursPerWeek: number;
   /** True when the recipient is also on this project. */
   shared: boolean;
-  /** "acting as Associate" when a VP/AVP sits in an associate slot here; else null. */
+  /** "Performing Associate role" when a VP/AVP sits in an associate slot here; else null. */
   performedRoleLabel: string | null;
 }
 
@@ -130,7 +130,7 @@ export function assemblePeerBandwidthData(
       const proj = allProjects.find(p => p.projectRecordId === s.projectRecordId);
       const role = proj ? resolveProjectRole(proj, fellow.recordId, isEligible).role : 'associate';
       const performedRoleLabel =
-        role === 'associate' && isVpOrAvp(fellow.designation) ? 'acting as Associate' : null;
+        role === 'associate' && isVpOrAvp(fellow.designation) ? 'Performing Associate role' : null;
       return {
         projectRecordId: s.projectRecordId,
         projectName: s.projectName,
