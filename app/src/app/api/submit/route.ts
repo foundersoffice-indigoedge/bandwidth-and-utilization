@@ -10,6 +10,7 @@ import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
 import { createSignoffIfReady } from '@/lib/signoff';
+import { computeAllowedTargets, isAllowedSubmissionEntry, determineSeniorId } from '@/lib/project-role';
 
 interface EntryPayload {
   projectRecordId: string;
@@ -39,6 +40,21 @@ export async function POST(req: NextRequest) {
   // Fetch project data for names/types
   const allProjects = await fetchAllProjects();
   const projectMap = new Map(allProjects.map(p => [p.projectRecordId, p]));
+
+  // Server-authoritative role resolution: never trust client-posted targets.
+  const eligibleFellows = await fetchEligibleFellows();
+  const eligibleById = new Map(eligibleFellows.map(f => [f.recordId, f]));
+  const isEligibleVpAvp = (id: string) => {
+    const f = eligibleById.get(id);
+    return !!f && isVpOrAvp(f.designation);
+  };
+  const fellowProjects = allProjects.filter(p =>
+    p.vpAvpIds.includes(tokenRecord.fellowRecordId) ||
+    p.associateIds.includes(tokenRecord.fellowRecordId) ||
+    p.directorIds.includes(tokenRecord.fellowRecordId),
+  );
+  const fellowProjectIds = new Set(fellowProjects.map(p => p.projectRecordId));
+  const allowedTargets = computeAllowedTargets(fellowProjects, tokenRecord.fellowRecordId, isEligibleVpAvp);
 
   // Process and save each entry
   const savedSubmissions: Array<typeof submissions.$inferInsert & { id: string }> = [];
@@ -111,6 +127,15 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    // Server-side gate: drop unauthorized entries — a self-report on a project the fellow
+    // isn't on, or a projection to a target this fellow may not project for on this project.
+    if (!isAllowedSubmissionEntry(
+          { projectRecordId: entry.projectRecordId, targetFellowId: entry.targetFellowId },
+          allowedTargets, fellowProjectIds,
+        )) {
+      continue;
+    }
+
     const [saved] = await db
       .insert(submissions)
       .values({
@@ -132,13 +157,11 @@ export async function POST(req: NextRequest) {
     savedSubmissions.push(saved);
   }
 
-  // Cross-reference: check VP projections against associate self-reports
-  const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
-  const fellows = await fetchEligibleFellows();
-  const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
+  // Cross-reference: projections vs associate self-reports (reuse the eligible-fellow map above).
+  const fellowMap = eligibleById;
 
   for (const sub of savedSubmissions) {
-    if (isVp && !sub.isSelfReport && sub.targetFellowId) {
+    if (!sub.isSelfReport && sub.targetFellowId) {
       // VP just submitted a projection for an associate.
       // Check if the associate has already self-reported for this project.
       const [assocSub] = await db
@@ -155,6 +178,14 @@ export async function POST(req: NextRequest) {
         .limit(1);
 
       if (assocSub && isConflict(sub.hoursPerDay!, assocSub.hoursPerDay)) {
+        const [dup1] = await db.select().from(conflicts).where(and(
+          eq(conflicts.cycleId, tokenRecord.cycleId),
+          eq(conflicts.projectRecordId, sub.projectRecordId!),
+          eq(conflicts.vpSubmissionId, sub.id),
+          eq(conflicts.associateSubmissionId, assocSub.id),
+          eq(conflicts.source, 'submission'),
+        )).limit(1);
+        if (dup1) continue;
         const resToken = crypto.randomUUID();
         await db.insert(conflicts).values({
           cycleId: tokenRecord.cycleId,
@@ -200,10 +231,23 @@ export async function POST(req: NextRequest) {
           )
         );
 
+      const seniorId = (() => {
+        const proj = allProjects.find(p => p.projectRecordId === sub.projectRecordId);
+        return proj ? determineSeniorId(proj.vpAvpIds, proj.directorIds, isEligibleVpAvp) : null;
+      })();
       for (const vpSub of vpProjections) {
+        if (vpSub.fellowRecordId !== seniorId) continue;
         if (isConflict(vpSub.hoursPerDay, sub.hoursPerDay!)) {
           const vpFellow = fellowMap.get(vpSub.fellowRecordId);
           if (vpFellow) {
+            const [dup2] = await db.select().from(conflicts).where(and(
+              eq(conflicts.cycleId, tokenRecord.cycleId),
+              eq(conflicts.projectRecordId, sub.projectRecordId!),
+              eq(conflicts.vpSubmissionId, vpSub.id),
+              eq(conflicts.associateSubmissionId, sub.id),
+              eq(conflicts.source, 'submission'),
+            )).limit(1);
+            if (dup2) continue;
             const resToken = crypto.randomUUID();
             await db.insert(conflicts).values({
               cycleId: tokenRecord.cycleId,
