@@ -4,6 +4,10 @@
   "crons": [
     {
       "path": "/api/cron/start-cycle",
+      "schedule": "30 7 6 7 *"
+    },
+    {
+      "path": "/api/cron/start-cycle",
       "schedule": "30 3 * * 1"
     },
     {
