@@ -21,9 +21,9 @@
 
 ## File Structure
 
-- **Create** `src/lib/project-role.ts` — pure role resolver (`determineSeniorId`, `resolveProjectRole`, `computeAllowedTargets`, `isPendingProjectSenior`).
+- **Create** `src/lib/project-role.ts` — pure role resolver (`determineSeniorId`, `resolveProjectRole`, `computeAllowedTargets`, `isPendingProjectSenior`, `isAllowedSubmissionEntry`).
 - **Create** `tests/project-role.test.ts` — unit tests for the resolver.
-- **Modify** `tests/rules-contract.test.ts` — add VP/AVP slot-order contract assertions.
+- (`tests/rules-contract.test.ts` already locks VP/AVP slot order — no change, just keep it green.)
 - **Modify** `src/app/submit/[token]/page.tsx` — replace the `isVpRun/isVp/isLeadVp` block with `resolveProjectRole`; extract a pure `buildFormProjects` helper; pass performed role to the form.
 - **Create** `src/app/submit/[token]/build-form-projects.ts` — the extracted pure helper (testable without rendering the server component).
 - **Create** `tests/build-form-projects.test.ts`.
@@ -32,9 +32,9 @@
 - **Modify** `src/app/submit/[token]/form.tsx` — render per-project role pill; generalize the lead line.
 - **Modify** `src/app/api/submit/route.ts` — server-side entry validation, projection-based conflict gate, idempotency guard.
 - **Modify** `src/app/api/add-project/route.ts` — pending-project senior rule + teammate validation.
-- **Modify** `src/lib/director-flag.ts` — placement-aware resolver via `determineSeniorId`.
-- **Modify** `tests/director-flag.test.ts` — cover AVP-in-associate-slot.
+- **Modify** `src/lib/director-flag.ts` + `src/lib/signoff.ts` (caller) + `tests/director-flag.test.ts` — placement-aware resolver via `determineSeniorId`; cover AVP-in-associate-slot.
 - **Modify** `src/lib/peer-bandwidth.ts` + `tests/peer-bandwidth.test.ts` — per-project performed-role on `PeerProjectRow`; pill in HTML.
+- **Modify** `src/lib/email.ts` + conflict-email callers + `tests/templates-golden.test.ts` (+ snapshot) — performed-role label in conflict emails.
 
 ---
 
@@ -54,6 +54,7 @@
   - `resolveProjectRole(project: ProjectAssignment, fellowRecordId: string, isEligible: IsEligibleVpAvp): ResolvedProjectRole`
   - `computeAllowedTargets(projects: ProjectAssignment[], fellowRecordId: string, isEligible: IsEligibleVpAvp): Map<string, Set<string>>`
   - `isPendingProjectSenior(designation: string): boolean`
+  - `isAllowedSubmissionEntry(entry: { projectRecordId: string; targetFellowId: string | null }, allowedTargets: Map<string, Set<string>>, fellowProjectIds: Set<string>): boolean`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -65,6 +66,7 @@ import {
   determineSeniorId,
   resolveProjectRole,
   computeAllowedTargets,
+  isAllowedSubmissionEntry,
 } from '../src/lib/project-role';
 import type { ProjectAssignment } from '../src/types';
 
@@ -133,6 +135,26 @@ describe('computeAllowedTargets', () => {
     expect(map.get('p2')).toEqual(new Set());          // associate on p2
   });
 });
+
+describe('isAllowedSubmissionEntry', () => {
+  const p1 = project({ projectRecordId: 'p1', vpAvpIds: ['recMe'], associateIds: ['recA1'] });
+  const p2 = project({ projectRecordId: 'p2', vpAvpIds: ['recOther'], associateIds: ['recMe'] });
+  const allowed = computeAllowedTargets([p1, p2], 'recMe', eligible(['recMe', 'recOther']));
+  const onProjects = new Set(['p1', 'p2']);
+
+  it('allows a self-report on a project the fellow is on', () => {
+    expect(isAllowedSubmissionEntry({ projectRecordId: 'p1', targetFellowId: null }, allowed, onProjects)).toBe(true);
+  });
+  it('rejects a self-report on a project the fellow is NOT on', () => {
+    expect(isAllowedSubmissionEntry({ projectRecordId: 'pX', targetFellowId: null }, allowed, onProjects)).toBe(false);
+  });
+  it('allows a senior projection to a real associate', () => {
+    expect(isAllowedSubmissionEntry({ projectRecordId: 'p1', targetFellowId: 'recA1' }, allowed, onProjects)).toBe(true);
+  });
+  it('rejects a projection where the fellow is only an associate (p2)', () => {
+    expect(isAllowedSubmissionEntry({ projectRecordId: 'p2', targetFellowId: 'recSomeone' }, allowed, onProjects)).toBe(false);
+  });
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -146,7 +168,7 @@ Create `src/lib/project-role.ts`:
 
 ```ts
 import type { ProjectAssignment } from '@/types';
-import { isVpOrAvp } from '@/lib/airtable/fellows';
+import { getStringList } from 'ie-ai-rulebook';
 
 export type MandateRole = 'senior' | 'second_senior' | 'associate';
 
@@ -199,11 +221,25 @@ export function computeAllowedTargets(
   return map;
 }
 
-/** Pending (mid-cycle) projects have no Airtable columns; the creator is senior iff they are a VP/AVP. */
+/** Pending (mid-cycle) projects have no Airtable columns; the creator is senior iff they are a VP/AVP.
+ *  Reads the vocab directly from the rulebook to keep this module free of the airtable client import. */
 export function isPendingProjectSenior(designation: string): boolean {
-  return isVpOrAvp(designation);
+  return getStringList('utilization-mis.vocab.vp-avp').includes(designation);
+}
+
+/** Server-side gate for a posted (non-pending) submission entry. Self-reports are allowed only for
+ *  projects the fellow is actually on; projections only to an authorized target on that project. */
+export function isAllowedSubmissionEntry(
+  entry: { projectRecordId: string; targetFellowId: string | null },
+  allowedTargets: Map<string, Set<string>>,
+  fellowProjectIds: Set<string>,
+): boolean {
+  if (entry.targetFellowId === null) return fellowProjectIds.has(entry.projectRecordId);
+  return allowedTargets.get(entry.projectRecordId)?.has(entry.targetFellowId) ?? false;
 }
 ```
+
+Note: `resolveProjectRole`/`determineSeniorId`/`computeAllowedTargets` take an injected `isEligible` predicate, so this module imports no airtable client code — it stays pure/deterministic.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -219,47 +255,11 @@ git commit -m "feat(role): pure per-mandate role resolver"
 
 ---
 
-## Task 2: Slot-order contract test
+## Task 2: (Removed — slot ordering is already locked)
 
-**Files:**
-- Modify: `tests/rules-contract.test.ts`
-
-**Interfaces:**
-- Consumes: `teamRoleFields` from `ie-ai-rulebook` (already used by `src/lib/airtable/config.ts`).
-
-Senior selection depends on `fetchAllProjects` preserving VP/AVP slot order, which comes from the rulebook. Lock it.
-
-- [ ] **Step 1: Add the failing assertions**
-
-Append to `tests/rules-contract.test.ts`:
-
-```ts
-import { teamRoleFields } from 'ie-ai-rulebook';
-
-describe('VP/AVP slot ordering contract (senior selection depends on it)', () => {
-  it('mandate VP/AVP fields are ordered [1, 2]', () => {
-    const names = teamRoleFields('mandate', 'vpAvp').map(f => f.name);
-    expect(names[0]).toBe('Mandate VP / AVP 1');
-    expect(names[1]).toBe('Mandate VP / AVP 2');
-  });
-  it('pitch VP/AVP has the primary slot first', () => {
-    const names = teamRoleFields('pitch', 'vpAvp').map(f => f.name);
-    expect(names[0]).toBe('Pitch VP / AVP');
-  });
-});
-```
-
-- [ ] **Step 2: Run to verify pass (contract currently holds)**
-
-Run: `pnpm test:run tests/rules-contract.test.ts`
-Expected: PASS. (If it fails, the rulebook contract changed and senior selection must be revisited — that is the point of this test.)
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add tests/rules-contract.test.ts
-git commit -m "test(role): lock VP/AVP slot ordering contract"
-```
+`tests/rules-contract.test.ts` already asserts the VP/AVP field order that senior selection depends on:
+`m.vpAvpFields === ['Mandate VP / AVP 1', 'Mandate VP / AVP 2']` and `p.vpAvpFields === ['Pitch VP / AVP', 'Pitch VP / AVP 2']`.
+No new test needed. When implementing, just confirm this file still passes; if it ever fails, senior selection must be revisited. No code change, no commit.
 
 ---
 
@@ -305,14 +305,16 @@ describe('buildFormProjects', () => {
     expect(fp.associates.map(a => a.recordId)).toEqual(['recAssoc']);
     expect(fp.performedRole).toBe('senior');
     expect(fp.performedRoleLabel).toBeNull();
+    expect(fp.leadFellowName).toBe('Adit'); // senior on this mandate
   });
 
-  it('AVP in the associate slot sees self only and an "acting as Associate" pill', () => {
+  it('AVP in the associate slot sees self only, an "acting as Associate" pill, and the real senior as lead', () => {
     const p = project({ projectRecordId: 'pant', vpAvpIds: ['recTanya'], associateIds: ['recAdit'] });
     const [fp] = buildFormProjects([p], 'recAdit', 'AVP', fellows);
     expect(fp.associates).toEqual([]);
     expect(fp.performedRole).toBe('associate');
     expect(fp.performedRoleLabel).toBe('acting as Associate');
+    expect(fp.leadFellowName).toBe('Tanya'); // lead line shows the senior even on a director-led mandate
   });
 
   it('second VP/AVP sees self only', () => {
@@ -336,7 +338,7 @@ Create `src/app/submit/[token]/build-form-projects.ts`:
 ```ts
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { isVpOrAvp } from '@/lib/airtable/fellows';
-import { resolveProjectRole, type MandateRole } from '@/lib/project-role';
+import { resolveProjectRole, determineSeniorId, type MandateRole } from '@/lib/project-role';
 
 export interface FormProject {
   projectRecordId: string;
@@ -381,6 +383,11 @@ export function buildFormProjects(
       .filter((f): f is Fellow => f != null)
       .map(f => ({ recordId: f.recordId, name: f.name }));
 
+    // Lead line: the project's senior, computed the same way for every mandate type
+    // (the Airtable `leadFellowName` is only populated for VP-run mandates, so don't rely on it).
+    const seniorId = determineSeniorId(project.vpAvpIds, project.directorIds, isEligible);
+    const leadFellowName = seniorId ? byId.get(seniorId)?.name : undefined;
+
     return {
       projectRecordId: project.projectRecordId,
       projectName: project.projectName,
@@ -388,7 +395,7 @@ export function buildFormProjects(
       stage: project.stage,
       associates,
       isVpRun: project.isVpRun,
-      leadFellowName: project.leadFellowName,
+      leadFellowName,
       performedRole: role,
       performedRoleLabel: pillFor(role, fellowDesignation),
     };
@@ -493,9 +500,29 @@ export function deriveEntries(
 }
 ```
 
-- [ ] **Step 4: Update the form caller**
+- [ ] **Step 4: Update the form caller (two edits in `form.tsx`)**
 
-In `src/app/submit/[token]/form.tsx`, find the `deriveEntries(` call (inside the `useMemo`) and remove the `isVp` argument. The `isVp` prop stays on the component for now (used by add-project UI); only the `deriveEntries` call loses it.
+(a) In the `useMemo`, drop the `isVp` argument:
+
+```tsx
+() => deriveEntries(projects, userInput, initialEntries),
+[projects, userInput, initialEntries],
+```
+
+(b) The main-form associate inputs currently gate on the global `isVp` (~line 149: `{isVp && project.associates.map(...)}`). Change this to per-project, since `associates` is now populated only for a senior:
+
+```tsx
+{project.associates.map(assoc => (
+  <HoursInput
+    key={assoc.recordId}
+    label={assoc.name}
+    entry={entries[`${project.projectRecordId}:${assoc.recordId}`]}
+    onChange={(field, val) => update(`${project.projectRecordId}:${assoc.recordId}`, field, val)}
+  />
+))}
+```
+
+(An empty `associates` renders nothing, so the guard is unnecessary.) The `isVp` prop stays on the component for the add-project UI and is repurposed in Task 7; only these two main-form uses change here.
 
 - [ ] **Step 5: Run tests + typecheck**
 
@@ -525,20 +552,35 @@ Add `performedRoleLabel?: string | null;` to the local `Project`/`FormProject` i
 
 - [ ] **Step 2: Render the pill and generalize the lead line**
 
-Where each project header renders (near the current `VP-run{project.leadFellowName ? ...}` line ~138), add:
+In the project header block (currently ~lines 136-140), keep the VP-run badge as a pure mandate-type marker but strip the `· Led by` from inside it, and add the role pill + a standalone lead line. Replace:
 
 ```tsx
+{project.isVpRun && (
+  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+    VP-run{project.leadFellowName ? ` · Led by ${project.leadFellowName}` : ''}
+  </span>
+)}
+```
+
+with:
+
+```tsx
+{project.isVpRun && (
+  <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
+    VP-run
+  </span>
+)}
 {project.performedRoleLabel && (
-  <span className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+  <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
     {project.performedRoleLabel}
   </span>
 )}
 {project.leadFellowName && (
-  <span className="ml-2 text-xs text-gray-500">Led by {project.leadFellowName}</span>
+  <span className="text-xs text-gray-500">Led by {project.leadFellowName}</span>
 )}
 ```
 
-Remove the old `VP-run · Led by …` conditional (the "Led by" now shows for any mandate with a known senior; `leadFellowName` is only set when there is one).
+The "Led by" now shows for any mandate with a known senior (`leadFellowName` is set by `buildFormProjects` from the computed senior).
 
 - [ ] **Step 3: Manual/visual check via existing snapshot tests**
 
@@ -560,14 +602,16 @@ git commit -m "feat(role): show acting-as pill and generalized lead line"
 - Modify: `src/app/api/submit/route.ts`
 
 **Interfaces:**
-- Consumes: `computeAllowedTargets` (Task 1); `fetchAllProjects`, `fetchEligibleFellows`, `isVpOrAvp`.
+- Consumes: `computeAllowedTargets`, `isAllowedSubmissionEntry`, `determineSeniorId` (Task 1); `fetchAllProjects`, `fetchEligibleFellows`, `isVpOrAvp`.
 
-- [ ] **Step 1: Build the eligibility predicate + allowed-target map early**
+The pure decision (`isAllowedSubmissionEntry`) is already tested in Task 1. This task wires it into the route and hardens conflict creation. All steps below edit `src/app/api/submit/route.ts` only.
 
-Near the top of `POST`, after `const allProjects = await fetchAllProjects();` and after the token is validated, add:
+- [ ] **Step 1: Build the eligibility predicate, fellow-project set, and allowed-target map**
+
+Near the top of `POST`, after `const allProjects = await fetchAllProjects();` (the map `projectMap` is built right after — keep it), add:
 
 ```ts
-import { computeAllowedTargets } from '@/lib/project-role';
+import { computeAllowedTargets, isAllowedSubmissionEntry, determineSeniorId } from '@/lib/project-role';
 // ...
 const eligibleFellows = await fetchEligibleFellows();
 const eligibleById = new Map(eligibleFellows.map(f => [f.recordId, f]));
@@ -580,82 +624,90 @@ const fellowProjects = allProjects.filter(p =>
   p.associateIds.includes(tokenRecord.fellowRecordId) ||
   p.directorIds.includes(tokenRecord.fellowRecordId),
 );
+const fellowProjectIds = new Set(fellowProjects.map(p => p.projectRecordId));
 const allowedTargets = computeAllowedTargets(fellowProjects, tokenRecord.fellowRecordId, isEligibleVpAvp);
 ```
 
-- [ ] **Step 2: Validate each entry before insert**
+- [ ] **Step 2: Validate every non-pending entry before insert (self-reports too)**
 
-Inside the `for (const entry of entries)` loop, for non-pending, non-self entries, drop anything not allowed. Right after `const isSelfReport = entry.targetFellowId === null;` (for the non-pending branch) add:
+Inside `for (const entry of entries)`, in the non-pending branch (`else { ... }` where `project = projectMap.get(...)`), right after `const isSelfReport = entry.targetFellowId === null;`, drop unauthorized entries:
 
 ```ts
-if (!isPending && !isSelfReport) {
-  const allowed = allowedTargets.get(entry.projectRecordId);
-  if (!allowed || !allowed.has(entry.targetFellowId!)) {
-    continue; // ignore projections the server did not authorize
-  }
+if (!isAllowedSubmissionEntry(
+      { projectRecordId: entry.projectRecordId, targetFellowId: entry.targetFellowId },
+      allowedTargets, fellowProjectIds,
+    )) {
+  continue; // reject self-reports on projects the fellow isn't on, and unauthorized projections
 }
 ```
 
-(Pending projects are handled in Task 7; leave their branch unchanged here.)
+(Pending entries — `projectRecordId.startsWith('pending_')` — keep their existing branch; Task 7 governs them.)
 
 - [ ] **Step 3: Replace the title-based conflict gate**
 
-Change the first conflict block condition from:
-
-```ts
-if (isVp && !sub.isSelfReport && sub.targetFellowId) {
-```
-
-to:
+Delete `const isVp = isVpOrAvp(tokenRecord.fellowDesignation);` in this route. Change the first conflict block condition from `if (isVp && !sub.isSelfReport && sub.targetFellowId) {` to:
 
 ```ts
 if (!sub.isSelfReport && sub.targetFellowId) {
 ```
 
-and delete the now-unused `const isVp = isVpOrAvp(tokenRecord.fellowDesignation);` line in this route.
+- [ ] **Step 4: Harden the self-report conflict block to the current senior**
 
-- [ ] **Step 4: Add an idempotency guard before inserting a conflict**
-
-In BOTH conflict-creation blocks, immediately before `await db.insert(conflicts).values({...})`, add a guard:
+The second block (on a self-report, find existing projections targeting this fellow) must only treat a projection as valid if its author is the project's **current senior**. Replace the loop that iterates `vpProjections` so it first computes the senior and skips others:
 
 ```ts
-const [dup] = await db
-  .select()
-  .from(conflicts)
-  .where(and(
-    eq(conflicts.cycleId, tokenRecord.cycleId),
-    eq(conflicts.projectRecordId, sub.projectRecordId!),
-    eq(conflicts.vpSubmissionId, /* the projection submission id in scope */),
-    eq(conflicts.associateSubmissionId, /* the self-report submission id in scope */),
-  ))
-  .limit(1);
-if (dup) continue;
+const seniorId = (() => {
+  const proj = allProjects.find(p => p.projectRecordId === sub.projectRecordId);
+  return proj ? determineSeniorId(proj.vpAvpIds, proj.directorIds, isEligibleVpAvp) : null;
+})();
+for (const vpSub of vpProjections) {
+  if (vpSub.fellowRecordId !== seniorId) continue; // ignore stale / non-senior projections
+  if (isConflict(vpSub.hoursPerDay, sub.hoursPerDay!)) {
+    // ... existing conflict-creation, with the idempotency guard from Step 5 ...
+  }
+}
 ```
 
-Use the correct submission-id variables local to each block (`sub.id`/`assocSub.id` in the first block; `vpSub.id`/`sub.id` in the second).
+- [ ] **Step 5: Add a full idempotency guard before each conflict insert**
 
-- [ ] **Step 5: Add a focused test for validation + gate**
-
-Because the route touches the DB, add a unit test for the pure guard instead. Extract the drop-decision into a tiny exported helper in `project-role.ts` if not already covered by `computeAllowedTargets`. `computeAllowedTargets` already gives us the check; add to `tests/project-role.test.ts`:
+In BOTH conflict-creation blocks, immediately before `await db.insert(conflicts).values({...})`, add. First block (VP just submitted a projection; ids `sub.id`, `assocSub.id`):
 
 ```ts
-it('a projection to a non-allowed target is rejected by the allowed-target map', () => {
-  const p = project({ projectRecordId: 'p2', vpAvpIds: ['recOther'], associateIds: ['recMe'] });
-  const map = computeAllowedTargets([p], 'recMe', eligible(['recOther', 'recMe']));
-  expect(map.get('p2')!.has('recSomeAssoc')).toBe(false); // recMe is an associate here → may project for no one
-});
+const [dup1] = await db.select().from(conflicts).where(and(
+  eq(conflicts.cycleId, tokenRecord.cycleId),
+  eq(conflicts.projectRecordId, sub.projectRecordId!),
+  eq(conflicts.vpSubmissionId, sub.id),
+  eq(conflicts.associateSubmissionId, assocSub.id),
+  eq(conflicts.source, 'submission'),
+)).limit(1);
+if (dup1) continue;
 ```
+
+Second block (self-report finds a senior projection; ids `vpSub.id`, `sub.id`):
+
+```ts
+const [dup2] = await db.select().from(conflicts).where(and(
+  eq(conflicts.cycleId, tokenRecord.cycleId),
+  eq(conflicts.projectRecordId, sub.projectRecordId!),
+  eq(conflicts.vpSubmissionId, vpSub.id),
+  eq(conflicts.associateSubmissionId, sub.id),
+  eq(conflicts.source, 'submission'),
+)).limit(1);
+if (dup2) continue;
+```
+
+(`conflicts.source` defaults to `'submission'`; the guard matches only submission-origin conflicts, never director-flag ones.)
 
 - [ ] **Step 6: Run tests + typecheck + build**
 
 Run: `pnpm test:run && npx tsc --noEmit`
-Expected: PASS.
+Expected: PASS. The pure gate is covered by Task 1's `isAllowedSubmissionEntry` tests; this step verifies the wiring compiles and no existing submit/conflict test regresses.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add "src/app/api/submit/route.ts" tests/project-role.test.ts
-git commit -m "feat(role): server-validate projections + projection-based conflict gate"
+git add "src/app/api/submit/route.ts"
+git commit -m "feat(role): server-validate entries, senior-scoped conflicts, idempotency"
 ```
 
 ---
@@ -697,18 +749,18 @@ for (const tb of payload.teammateBandwidth) {
 }
 ```
 
-- [ ] **Step 3: Align the page's pending branch**
+- [ ] **Step 3: Repurpose `isVp` in the page to the pending-senior capability**
 
-In `src/app/submit/[token]/page.tsx`, the `myPendingProjects` mapping currently uses `const associates = isVp ? teammateIds... : []`. Replace `isVp` there with the same pending rule:
+In `src/app/submit/[token]/page.tsx`, replace the old global `const isVp = isVpOrAvp(tokenRecord.fellowDesignation);` with:
 
 ```ts
 import { isPendingProjectSenior } from '@/lib/project-role';
-const creatorIsSenior = isPendingProjectSenior(tokenRecord.fellowDesignation);
-// ...
-const associates = creatorIsSenior ? teammateIds.map(...) : [];
+const canProjectForPending = isPendingProjectSenior(tokenRecord.fellowDesignation);
 ```
 
-Now the last use of the old `isVp` in `page.tsx` is gone — delete the `const isVp = isVpOrAvp(...)` line and its unused import if any.
+- Use `canProjectForPending` in the `myPendingProjects` mapping: `const associates = canProjectForPending ? teammateIds.map(...) : [];`.
+- The `<SubmissionForm ... />` render currently passes `isVp={isVp}`. Change it to `isVp={canProjectForPending}` (the form prop keeps its name to avoid a wide rename; it now means "may this fellow add projections for teammates on a *pending* project"). The `SubmissionForm`/`AddProjectBlock` prop and its uses in `form.tsx` are unchanged — they already only use `isVp` for the add-project teammate UI after Task 4 removed its main-form and `deriveEntries` uses.
+- Remove the now-unused `isVpOrAvp` import from `page.tsx` if nothing else references it (the eligibility predicate for real projects lives inside `buildFormProjects`, so `page.tsx` no longer needs `isVpOrAvp` directly).
 
 - [ ] **Step 4: Test the pending rule**
 
@@ -816,9 +868,16 @@ export function computeResolverForFlag(input: FlagResolverInput): ResolverResult
 }
 ```
 
-- [ ] **Step 4: Update the caller**
+- [ ] **Step 4: Update the sole caller (`src/lib/signoff.ts`)**
 
-Find every `computeResolverForFlag({ ... })` call in `src/` (grep: `rg -n computeResolverForFlag src`) and add `projectDirectorIds` from the project (the caller already has the `ProjectAssignment`; pass `project.directorIds`).
+The only non-test caller is `src/lib/signoff.ts` (~line 335), inside `enriched.map(item => { const resolver = computeResolverForFlag({ flaggedFellow: {...}, projectVpAvpIds: item.project.vpAvpIds, ... }) })`. Add the new field:
+
+```ts
+projectVpAvpIds: item.project.vpAvpIds,
+projectDirectorIds: item.project.directorIds,
+```
+
+Confirm no other caller exists: `rg -n computeResolverForFlag src` should show only `director-flag.ts` (definition) and `signoff.ts` (this call).
 
 - [ ] **Step 5: Run tests + typecheck**
 
@@ -834,19 +893,33 @@ git commit -m "feat(role): director-flag resolver follows performed role"
 
 ---
 
-## Task 9: Performed-role pill in peer + conflict emails
+## Task 9: Performed-role pill in the peer-bandwidth email
 
 **Files:**
 - Modify: `src/lib/peer-bandwidth.ts`
 - Modify: `tests/peer-bandwidth.test.ts`
 
 **Interfaces:**
-- Consumes: `resolveProjectRole` (Task 1). `assemblePeerBandwidthData` already has `allProjects` and `fellows`.
+- Consumes: `resolveProjectRole` (Task 1); `isVpOrAvp` from `src/lib/airtable/fellows.ts`. `assemblePeerBandwidthData` already receives `allProjects` and `fellows` (confirm by reading its signature: `assemblePeerBandwidthData(allSubmissions, fellows, allProjects, dateRange, pendingFellowIds)`).
 - Produces (changed): `PeerProjectRow` gains `performedRoleLabel: string | null`.
 
 - [ ] **Step 1: Write the failing test**
 
-Add to `tests/peer-bandwidth.test.ts` a case where a teammate is an AVP sitting in an associate slot on a shared project, and assert the assembled `PeerProjectRow.performedRoleLabel === 'acting as Associate'`, while the teammate's `designation` stays `'AVP'`. (Mirror the fixture shape already used in that file; set the project so `vpAvpIds` has another eligible VP/AVP and `associateIds` includes the teammate.)
+In `tests/peer-bandwidth.test.ts`, reuse the existing `SubmissionRow`/`Fellow`/`ProjectAssignment` fixtures in that file. Add a teammate who is an `AVP` sitting in the associate slot of a shared project (project `vpAvpIds: ['recOtherVp']` eligible VP/AVP, `associateIds: ['recTeammate']`), with a self-report submission for that project. Assert:
+
+```ts
+const models = assemblePeerBandwidthData(subs, fellows, projects, 'Jul 6 – Jul 12, 2026', new Set());
+const row = models
+  .flatMap(m => m.teammates)
+  .find(t => t.recordId === 'recTeammate')!
+  .projects.find(p => p.projectRecordId === 'recShared')!;
+expect(row.performedRoleLabel).toBe('acting as Associate');
+// designation label unchanged:
+const tm = models.flatMap(m => m.teammates).find(t => t.recordId === 'recTeammate')!;
+expect(tm.designation).toBe('AVP');
+```
+
+(If the file lacks a ready `ProjectAssignment` fixture, add one with the `project({...})` helper pattern used elsewhere.)
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -855,29 +928,46 @@ Expected: FAIL — `performedRoleLabel` undefined.
 
 - [ ] **Step 3: Populate the field at assembly time**
 
-In `assemblePeerBandwidthData`, where each `PeerProjectRow` is built (the `selfSubs.map`), compute the teammate's performed role on that project:
+At the top of `src/lib/peer-bandwidth.ts` add imports:
 
 ```ts
 import { resolveProjectRole } from '@/lib/project-role';
-// build isEligible once from `fellows`:
+import { isVpOrAvp } from '@/lib/airtable/fellows';
+```
+
+Add `performedRoleLabel: string | null;` to the `PeerProjectRow` interface. In `assemblePeerBandwidthData`, build the eligibility predicate once (fellows are in scope):
+
+```ts
 const eligById = new Map(fellows.map(f => [f.recordId, f]));
 const isEligible = (id: string) => {
   const f = eligById.get(id);
   return !!f && isVpOrAvp(f.designation);
 };
-// inside the projects map, per submission's project:
+```
+
+In the `selfSubs.map(s => { ... })` that builds each `PeerProjectRow` (note: `fellow` there is the teammate whose row this is), compute:
+
+```ts
 const proj = allProjects.find(p => p.projectRecordId === s.projectRecordId);
 const role = proj ? resolveProjectRole(proj, fellow.recordId, isEligible).role : 'associate';
 const performedRoleLabel =
   role === 'associate' && isVpOrAvp(fellow.designation) ? 'acting as Associate' : null;
 ```
 
-Add `performedRoleLabel` to the `PeerProjectRow` object and to its interface. In `buildPeerBandwidthEmailHtml`, render the label as a small pill in the project row when present (append to the project-name cell).
+and include `performedRoleLabel` in the returned row object. In `buildPeerBandwidthEmailHtml`, in the `projectRows` map, append a pill to the project-name cell when present:
+
+```ts
+const pill = p.performedRoleLabel
+  ? ` <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px">${p.performedRoleLabel}</span>`
+  : '';
+```
+
+and interpolate `${pill}` right after `${p.projectName}${sharedBadge}` in the cell.
 
 - [ ] **Step 4: Run tests + typecheck**
 
 Run: `pnpm test:run tests/peer-bandwidth.test.ts && npx tsc --noEmit`
-Expected: PASS.
+Expected: PASS. If a peer-bandwidth golden snapshot exists and changed, review and update with `-u`.
 
 - [ ] **Step 5: Commit**
 
@@ -888,7 +978,42 @@ git commit -m "feat(role): performed-role pill in peer bandwidth email"
 
 ---
 
-## Task 10: Full-suite green + production build
+## Task 10: Performed-role label in conflict emails
+
+**Files:**
+- Modify: `src/lib/email.ts` (`sendConflictEmail`, and reminder/resolution senders if they render the associate's name)
+- Modify: `src/app/api/submit/route.ts` and `src/app/api/add-project/route.ts` (callers pass the label)
+- Modify: `tests/templates-golden.test.ts` + `tests/__snapshots__/templates-golden.test.ts.snap`
+
+The user asked for the role to flow into conflict emails, not just peer emails. The conflict email names a senior and one associate; when that associate is an AVP-in-associate-slot, show the pill next to their name.
+
+- [ ] **Step 1: Extend `sendConflictEmail` with an optional label**
+
+In `src/lib/email.ts`, add a trailing optional parameter to `sendConflictEmail(...)`: `associateRoleLabel?: string`. Where the associate's name is rendered in the HTML, append a small pill when the label is present (same amber style as the peer pill). Keep the parameter optional so nothing breaks if a caller omits it.
+
+- [ ] **Step 2: Compute + pass the label from the submit route**
+
+In `src/app/api/submit/route.ts`, at each `sendConflictEmail(...)` call, compute the associate's performed role on that project via `resolveProjectRole(proj, associateFellowId, isEligibleVpAvp)` and pass `role === 'associate' && isVpOrAvp(associateDesignation) ? 'acting as Associate' : undefined`. The associate's designation comes from `eligibleById.get(associateFellowId)?.designation`. Do the same in `src/app/api/add-project/route.ts` (it already has `fellowMap`).
+
+- [ ] **Step 3: Update the golden snapshots deliberately**
+
+`tests/templates-golden.test.ts` calls the conflict senders directly. Add one case that passes `associateRoleLabel: 'acting as Associate'` and assert the pill appears; leave the existing no-label cases unchanged (the optional param means their output is identical). Run `pnpm test:run tests/templates-golden.test.ts`; if the snapshot legitimately changed only for the new case, update with `-u` and eyeball the diff.
+
+- [ ] **Step 4: Run tests + typecheck**
+
+Run: `pnpm test:run && npx tsc --noEmit`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/email.ts "src/app/api/submit/route.ts" "src/app/api/add-project/route.ts" tests/templates-golden.test.ts tests/__snapshots__
+git commit -m "feat(role): performed-role label in conflict emails"
+```
+
+---
+
+## Task 11: Full-suite green + production build
 
 **Files:** none (verification task).
 
@@ -918,6 +1043,7 @@ git add -A && git commit -m "chore(role): verification pass" || echo "nothing to
 
 ## Self-Review Checklist (run before handing off)
 
-- Spec §5 core rule → Tasks 1, 3. Spec §6 senior determination → Task 1. Spec §7.3 page → Task 3. §7.4 form-entries → Task 4. §7.5 form pill → Task 5. §7.6 submit validation/gate/idempotency → Task 6. §7.7 add-project → Task 7. §7.8 director-flag → Task 8. §7.9 peer/email → Task 9. §11 tests → each task + Task 2 contract. §13 rollout → Rollout section. All covered.
+- Spec §5 core rule → Tasks 1, 3. §6 senior determination → Task 1. §7.3 page → Tasks 3, 7. §7.4 form-entries → Task 4. §7.5 form pill → Task 5. §7.6 submit validation/gate/idempotency → Task 6. §7.7 add-project → Task 7. §7.8 director-flag → Task 8. §7.9 peer email → Task 9, conflict email → Task 10. §11 tests → each task (slot-order already locked in `rules-contract.test.ts`). §13 rollout → Rollout section. All covered.
 - No placeholders; every code step has real code.
-- Type names consistent: `MandateRole`, `ResolvedProjectRole`, `IsEligibleVpAvp`, `determineSeniorId`, `resolveProjectRole`, `computeAllowedTargets`, `isPendingProjectSenior`, `FormProject`, `buildFormProjects` used identically across tasks.
+- Type/symbol names consistent across tasks: `MandateRole`, `ResolvedProjectRole`, `IsEligibleVpAvp`, `determineSeniorId`, `resolveProjectRole`, `computeAllowedTargets`, `isPendingProjectSenior`, `isAllowedSubmissionEntry`, `FormProject`, `buildFormProjects`.
+- Codex round-2 findings incorporated: self-report validation (Task 6.2), senior-scoped self-report conflict block (6.4), full idempotency guards with `source` (6.5), `isVp`→`canProjectForPending` repurpose keeps `form.tsx` compiling (7.3), `leadFellowName` derived from computed senior (3), `signoff.ts` caller updated (8.4), peer import fixed + conflict emails as their own task (9, 10), `project-role.ts` free of the airtable client import (1).
