@@ -35,7 +35,6 @@ function defaultEntry(projectRecordId: string, targetFellowId: string | null): H
  */
 export function deriveEntries(
   projects: ProjectShape[],
-  isVp: boolean,
   userInput: Record<string, HoursEntry>,
   initialEntries: Record<string, { hoursValue: string; hoursUnit: 'per_day' | 'per_week' }> = {},
 ): Record<string, HoursEntry> {
@@ -43,11 +42,9 @@ export function deriveEntries(
   for (const project of projects) {
     const selfKey = `${project.projectRecordId}:self`;
     result[selfKey] = userInput[selfKey] ?? withInitial(defaultEntry(project.projectRecordId, null), initialEntries[selfKey]);
-    if (isVp) {
-      for (const assoc of project.associates) {
-        const key = `${project.projectRecordId}:${assoc.recordId}`;
-        result[key] = userInput[key] ?? withInitial(defaultEntry(project.projectRecordId, assoc.recordId), initialEntries[key]);
-      }
+    for (const assoc of project.associates) {
+      const key = `${project.projectRecordId}:${assoc.recordId}`;
+      result[key] = userInput[key] ?? withInitial(defaultEntry(project.projectRecordId, assoc.recordId), initialEntries[key]);
     }
   }
   return result;

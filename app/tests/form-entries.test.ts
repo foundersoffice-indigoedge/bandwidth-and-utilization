@@ -40,21 +40,52 @@ const newPitch: ProjectShape = {
   isNew: true,
 };
 
-describe('deriveEntries — non-VP fellow', () => {
-  it('creates one :self entry per project, ignoring associates', () => {
-    const result = deriveEntries([mandate, dde, pitch], false, {});
+// A project the fellow is on only as an associate: buildFormProjects leaves
+// `associates` empty, so deriveEntries produces just a :self entry.
+const mandateSelfOnly: ProjectShape = {
+  projectRecordId: 'recMandate1',
+  projectType: 'mandate',
+  associates: [],
+};
+
+describe('deriveEntries — self + associate keys from project.associates', () => {
+  it('creates :self for every project and an entry per listed associate', () => {
+    const result = deriveEntries([mandate, dde, pitch], {});
     expect(Object.keys(result).sort()).toEqual([
+      'recDde1:recAssoc2',
       'recDde1:self',
+      'recMandate1:recAssoc1',
       'recMandate1:self',
       'recPitch1:self',
     ]);
   });
 
+  it('creates associate entries whenever the project lists associates (no global VP flag)', () => {
+    const result = deriveEntries([mandate], {});
+    expect(result['recMandate1:self']).toBeDefined();
+    expect(result['recMandate1:recAssoc1']).toBeDefined();
+  });
+
+  it('creates only a self entry when the project lists no associates', () => {
+    const result = deriveEntries([pitch], {});
+    expect(Object.keys(result).filter(k => k.startsWith('recPitch1:'))).toEqual(['recPitch1:self']);
+  });
+
   it('self entry has null targetFellowId and empty hours', () => {
-    const result = deriveEntries([mandate], false, {});
+    const result = deriveEntries([mandateSelfOnly], {});
     expect(result['recMandate1:self']).toEqual({
       projectRecordId: 'recMandate1',
       targetFellowId: null,
+      hoursValue: '',
+      hoursUnit: 'per_day',
+    });
+  });
+
+  it('associate entry has correct targetFellowId', () => {
+    const result = deriveEntries([mandate], {});
+    expect(result['recMandate1:recAssoc1']).toEqual({
+      projectRecordId: 'recMandate1',
+      targetFellowId: 'recAssoc1',
       hoursValue: '',
       hoursUnit: 'per_day',
     });
@@ -69,42 +100,15 @@ describe('deriveEntries — non-VP fellow', () => {
         hoursUnit: 'per_week',
       },
     };
-    const result = deriveEntries([mandate, dde], false, prior);
+    const result = deriveEntries([mandateSelfOnly, dde], prior);
     expect(result['recMandate1:self'].hoursValue).toBe('4.5');
     expect(result['recMandate1:self'].hoursUnit).toBe('per_week');
     expect(result['recDde1:self'].hoursValue).toBe('');
   });
 });
 
-describe('deriveEntries — VP fellow', () => {
-  it('creates :self + one entry per associate for each project', () => {
-    const result = deriveEntries([mandate, dde], true, {});
-    expect(Object.keys(result).sort()).toEqual([
-      'recDde1:recAssoc2',
-      'recDde1:self',
-      'recMandate1:recAssoc1',
-      'recMandate1:self',
-    ]);
-  });
-
-  it('associate entry has correct targetFellowId', () => {
-    const result = deriveEntries([mandate], true, {});
-    expect(result['recMandate1:recAssoc1']).toEqual({
-      projectRecordId: 'recMandate1',
-      targetFellowId: 'recAssoc1',
-      hoursValue: '',
-      hoursUnit: 'per_day',
-    });
-  });
-
-  it('handles project with zero associates', () => {
-    const result = deriveEntries([pitch], true, {});
-    expect(Object.keys(result)).toEqual(['recPitch1:self']);
-  });
-});
-
 describe('deriveEntries — adding a new project after mount', () => {
-  it('covers new mandate for non-VP fellow without losing prior input', () => {
+  it('covers a new self-only mandate without losing prior input', () => {
     const prior: Record<string, HoursEntry> = {
       'recMandate1:self': {
         projectRecordId: 'recMandate1',
@@ -113,7 +117,13 @@ describe('deriveEntries — adding a new project after mount', () => {
         hoursUnit: 'per_day',
       },
     };
-    const result = deriveEntries([mandate, newMandate], false, prior);
+    const newSelfOnly: ProjectShape = {
+      projectRecordId: 'pending_abc123',
+      projectType: 'mandate',
+      associates: [],
+      isNew: true,
+    };
+    const result = deriveEntries([mandateSelfOnly, newSelfOnly], prior);
     expect(result['recMandate1:self'].hoursValue).toBe('3');
     expect(result['pending_abc123:self']).toEqual({
       projectRecordId: 'pending_abc123',
@@ -123,23 +133,24 @@ describe('deriveEntries — adding a new project after mount', () => {
     });
   });
 
-  it('covers new DDE for non-VP fellow', () => {
-    const result = deriveEntries([dde, newDde], false, {});
+  it('covers a new DDE', () => {
+    const result = deriveEntries([dde, newDde], {});
     expect(result['pending_def456:self']).toBeDefined();
     expect(result['pending_def456:self'].targetFellowId).toBeNull();
   });
 
-  it('covers new pitch for non-VP fellow', () => {
-    const result = deriveEntries([pitch, newPitch], false, {});
+  it('covers a new pitch with associates', () => {
+    const result = deriveEntries([pitch, newPitch], {});
     expect(result['pending_ghi789:self']).toBeDefined();
+    expect(result['pending_ghi789:recAssoc4']).toBeDefined();
   });
 
-  it('covers new mandate + associate entries for VP fellow', () => {
+  it('covers a new mandate + associate entries without losing prior input', () => {
     const prior: Record<string, HoursEntry> = {
       'recMandate1:self': { projectRecordId: 'recMandate1', targetFellowId: null, hoursValue: '2', hoursUnit: 'per_day' },
       'recMandate1:recAssoc1': { projectRecordId: 'recMandate1', targetFellowId: 'recAssoc1', hoursValue: '4', hoursUnit: 'per_day' },
     };
-    const result = deriveEntries([mandate, newMandate], true, prior);
+    const result = deriveEntries([mandate, newMandate], prior);
     expect(result['recMandate1:self'].hoursValue).toBe('2');
     expect(result['recMandate1:recAssoc1'].hoursValue).toBe('4');
     expect(result['pending_abc123:self']).toBeDefined();
@@ -151,14 +162,14 @@ describe('deriveEntries — adding a new project after mount', () => {
     });
   });
 
-  it('covers new DDE with associates for VP fellow', () => {
+  it('covers a new DDE with multiple associates', () => {
     const withAssoc: ProjectShape = {
       projectRecordId: 'pending_ddex',
       projectType: 'dde',
       associates: [{ recordId: 'recA', name: 'A' }, { recordId: 'recB', name: 'B' }],
       isNew: true,
     };
-    const result = deriveEntries([withAssoc], true, {});
+    const result = deriveEntries([withAssoc], {});
     expect(Object.keys(result).sort()).toEqual([
       'pending_ddex:recA',
       'pending_ddex:recB',
@@ -176,7 +187,6 @@ describe('deriveEntries — adding a new project after mount', () => {
     };
     const afterAddingNew = deriveEntries(
       [mandate, dde, newMandate, newDde, newPitch],
-      false,
       priorAfterMount,
     );
     for (const p of [mandate, dde, newMandate, newDde, newPitch]) {
@@ -190,7 +200,13 @@ describe('deriveEntries — initialEntries pre-fill', () => {
     const initial = {
       'pending_abc123:self': { hoursValue: '5', hoursUnit: 'per_day' as const },
     };
-    const result = deriveEntries([newMandate], false, {}, initial);
+    const newSelfOnly: ProjectShape = {
+      projectRecordId: 'pending_abc123',
+      projectType: 'mandate',
+      associates: [],
+      isNew: true,
+    };
+    const result = deriveEntries([newSelfOnly], {}, initial);
     expect(result['pending_abc123:self']).toEqual({
       projectRecordId: 'pending_abc123',
       targetFellowId: null,
@@ -199,12 +215,12 @@ describe('deriveEntries — initialEntries pre-fill', () => {
     });
   });
 
-  it('pre-fills associate entries for VP from initialEntries', () => {
+  it('pre-fills associate entries from initialEntries', () => {
     const initial = {
       'pending_abc123:self': { hoursValue: '3', hoursUnit: 'per_day' as const },
       'pending_abc123:recAssoc3': { hoursValue: '6', hoursUnit: 'per_week' as const },
     };
-    const result = deriveEntries([newMandate], true, {}, initial);
+    const result = deriveEntries([newMandate], {}, initial);
     expect(result['pending_abc123:self'].hoursValue).toBe('3');
     expect(result['pending_abc123:recAssoc3']).toEqual({
       projectRecordId: 'pending_abc123',
@@ -226,7 +242,7 @@ describe('deriveEntries — initialEntries pre-fill', () => {
         hoursUnit: 'per_week',
       },
     };
-    const result = deriveEntries([newMandate], false, prior, initial);
+    const result = deriveEntries([newMandate], prior, initial);
     expect(result['pending_abc123:self'].hoursValue).toBe('7');
     expect(result['pending_abc123:self'].hoursUnit).toBe('per_week');
   });
@@ -235,7 +251,7 @@ describe('deriveEntries — initialEntries pre-fill', () => {
     const initial = {
       'pending_ghost:self': { hoursValue: '9', hoursUnit: 'per_day' as const },
     };
-    const result = deriveEntries([mandate], false, {}, initial);
+    const result = deriveEntries([mandateSelfOnly], {}, initial);
     expect(result['pending_ghost:self']).toBeUndefined();
     expect(result['recMandate1:self'].hoursValue).toBe('');
   });
@@ -244,7 +260,7 @@ describe('deriveEntries — initialEntries pre-fill', () => {
     const initial = {
       'pending_abc123:self': { hoursValue: '5', hoursUnit: 'per_day' as const },
     };
-    const result = deriveEntries([mandate, newMandate], false, {}, initial);
+    const result = deriveEntries([mandateSelfOnly, newMandate], {}, initial);
     expect(result['recMandate1:self'].hoursValue).toBe('');
     expect(result['pending_abc123:self'].hoursValue).toBe('5');
   });
@@ -252,25 +268,27 @@ describe('deriveEntries — initialEntries pre-fill', () => {
 
 describe('deriveEntries — edge cases', () => {
   it('returns empty object for empty projects list', () => {
-    expect(deriveEntries([], false, {})).toEqual({});
-    expect(deriveEntries([], true, {})).toEqual({});
+    expect(deriveEntries([], {})).toEqual({});
   });
 
   it('ignores orphan keys in userInput that no longer match any project', () => {
     const stale: Record<string, HoursEntry> = {
       'recDeleted:self': { projectRecordId: 'recDeleted', targetFellowId: null, hoursValue: '9', hoursUnit: 'per_day' },
     };
-    const result = deriveEntries([mandate], false, stale);
+    const result = deriveEntries([mandateSelfOnly], stale);
     expect(result['recDeleted:self']).toBeUndefined();
     expect(Object.keys(result)).toEqual(['recMandate1:self']);
   });
 
-  it('drops associate entries when fellow transitions from VP to non-VP', () => {
-    const priorAsVp: Record<string, HoursEntry> = {
+  it('drops associate entries when the project no longer lists that associate', () => {
+    // Models the old "VP → non-VP" transition: the same project now arrives
+    // with an empty associates list (the fellow is an associate here now),
+    // so the stale associate key must be dropped.
+    const priorWithAssoc: Record<string, HoursEntry> = {
       'recMandate1:self': { projectRecordId: 'recMandate1', targetFellowId: null, hoursValue: '2', hoursUnit: 'per_day' },
       'recMandate1:recAssoc1': { projectRecordId: 'recMandate1', targetFellowId: 'recAssoc1', hoursValue: '4', hoursUnit: 'per_day' },
     };
-    const result = deriveEntries([mandate], false, priorAsVp);
+    const result = deriveEntries([mandateSelfOnly], priorWithAssoc);
     expect(result['recMandate1:recAssoc1']).toBeUndefined();
     expect(result['recMandate1:self'].hoursValue).toBe('2');
   });

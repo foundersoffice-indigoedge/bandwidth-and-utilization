@@ -64,8 +64,8 @@ export function SubmissionForm({
   const router = useRouter();
   const [userInput, setUserInput] = useState<Record<string, HoursEntry>>({});
   const entries = useMemo(
-    () => deriveEntries(projects, isVp, userInput, initialEntries),
-    [projects, isVp, userInput, initialEntries],
+    () => deriveEntries(projects, userInput, initialEntries),
+    [projects, userInput, initialEntries],
   );
   const [remarks, setRemarks] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -146,17 +146,16 @@ export function SubmissionForm({
                     onChange={(field, val) => update(`${project.projectRecordId}:self`, field, val)}
                   />
 
-                  {isVp &&
-                    project.associates.map(assoc => (
-                      <HoursInput
-                        key={assoc.recordId}
-                        label={assoc.name}
-                        entry={entries[`${project.projectRecordId}:${assoc.recordId}`]}
-                        onChange={(field, val) =>
-                          update(`${project.projectRecordId}:${assoc.recordId}`, field, val)
-                        }
-                      />
-                    ))}
+                  {project.associates.map(assoc => (
+                    <HoursInput
+                      key={assoc.recordId}
+                      label={assoc.name}
+                      entry={entries[`${project.projectRecordId}:${assoc.recordId}`]}
+                      onChange={(field, val) =>
+                        update(`${project.projectRecordId}:${assoc.recordId}`, field, val)
+                      }
+                    />
+                  ))}
                 </div>
               ))}
             </div>
