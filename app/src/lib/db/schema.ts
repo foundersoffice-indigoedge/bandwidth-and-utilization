@@ -36,6 +36,8 @@ export const submissions = pgTable('submissions', {
   targetFellowId: text('target_fellow_id'),
   remarks: text('remarks'),
   hoursPerWeek: real('hours_per_week'),
+  remarksClaimedAt: timestamp('remarks_claimed_at'),
+  remarksProcessedAt: timestamp('remarks_processed_at'),
 });
 
 export const directorSignoffs = pgTable('director_signoffs', {
