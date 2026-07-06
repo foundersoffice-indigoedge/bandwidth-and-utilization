@@ -5,26 +5,44 @@ const processedUpdate = vi.fn();
 let processedTargetRows: Array<{ cycleId: string; fellowRecordId: string; remarks: string | null }> = [];
 
 vi.mock('@/lib/db', () => {
-  const candidateRows = [
-    { id: 's1', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'X - DDE | Jun 2026', projectType: 'dde', projectRecordId: 'recX', cycleStartDate: '2026-07-13' },
-    { id: 's2', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'Y Pitch | Jun 2026', projectType: 'pitch', projectRecordId: 'recY', cycleStartDate: '2026-07-13' },
+  const claimedRows = [
+    { id: 's1', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'X - DDE | Jun 2026', projectType: 'dde', projectRecordId: 'recX' },
+    { id: 's2', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'Y Pitch | Jun 2026', projectType: 'pitch', projectRecordId: 'recY' },
   ];
 
-  const tx = {
+  const db = {
     select: (selection?: Record<string, unknown>) => {
-      if (selection && 'id' in selection) {
+      const keys = Object.keys(selection ?? {});
+
+      if (keys.length === 1 && keys.includes('id')) {
         return {
           from: () => ({
             innerJoin: () => ({
-              where: () => ({
-                for: async () => candidateRows,
-              }),
+              where: () => ({ __subquery: true }),
             }),
           }),
         };
       }
 
-      if (selection && 'type' in selection) {
+      if (keys.includes('startDate')) {
+        return {
+          from: () => ({
+            where: async () => ([{ id: 'c1', startDate: '2026-07-13' }]),
+          }),
+        };
+      }
+
+      if (keys.includes('cycleId') && keys.includes('fellowRecordId') && keys.includes('remarks')) {
+        return {
+          from: () => ({
+            where: () => ({
+              limit: async () => processedTargetRows,
+            }),
+          }),
+        };
+      }
+
+      if (keys.includes('type')) {
         return {
           from: () => ({
             where: async () => ([
@@ -44,27 +62,14 @@ vi.mock('@/lib/db', () => {
       };
     },
     update: () => ({
-      set: () => ({
+      set: (values: Record<string, unknown>) => ({
         where: (...a: unknown[]) => {
-          claimUpdate(...a);
-          return Promise.resolve();
-        },
-      }),
-    }),
-  };
-
-  const db = {
-    transaction: (cb: (t: typeof tx) => unknown) => cb(tx),
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: async () => processedTargetRows,
-        }),
-      }),
-    }),
-    update: () => ({
-      set: () => ({
-        where: (...a: unknown[]) => {
+          if ('remarksClaimedAt' in values) {
+            claimUpdate(...a);
+            return {
+              returning: async () => claimedRows,
+            };
+          }
           processedUpdate(...a);
           return Promise.resolve();
         },
