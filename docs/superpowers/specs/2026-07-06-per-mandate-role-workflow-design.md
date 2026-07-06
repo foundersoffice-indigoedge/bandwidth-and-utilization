@@ -1,7 +1,7 @@
 # Per-Mandate Role Workflow — Design Spec
 
 - **Date:** 2026-07-06
-- **Status:** Draft (pending Codex review + user approval)
+- **Status:** Draft — self-reviewed + Codex-reviewed (7 findings incorporated); pending user approval
 - **Author:** Ajder (via Claude)
 - **Related:** [director-signoff-design](2026-05-13-director-signoff-design.md), [utilization-mis-v2-updates-design](2026-04-20-utilization-mis-v2-updates-design.md)
 
@@ -141,15 +141,31 @@ The `isEligibleVpAvp` predicate is built by the caller from the already-fetched 
 
 - Render a small role pill per project when the performed role differs from the person's designation (e.g. "acting as Associate"). Generalize the existing "VP-run · Led by X" line to "Led by {seniorName}" for any mandate that has a senior.
 
-### 7.6 `src/app/api/submit/route.ts`
+### 7.6 `src/app/api/submit/route.ts` (server is the source of truth — do NOT trust the client)
 
-- Conflict detection currently gates the VP→associate branch on the global `isVp`. Change the gate to "this saved row is a projection" (`!sub.isSelfReport && sub.targetFellowId`), which is only ever produced by a senior under the new form logic. Routing then follows automatically: conflicts pair the senior's projection with the associate's self-report, and the conflict email goes to the senior. The symmetric self-report branch is unchanged.
-- Net effect: all conflicts on a mandate route to the senior (goal 2/3), and second seniors never appear in a conflict.
+The submit route currently saves whatever `entries` the client posts and gates the VP→associate conflict branch on the global `isVp`. Two problems: (a) a stale/crafted payload from a second senior or associate could post projection rows; (b) moving the gate to "row is a projection" without validation would then turn those bogus rows into conflicts.
 
-### 7.7 `src/lib/peer-bandwidth.ts` and `src/lib/email.ts`
+Changes:
+- **Recompute roles server-side.** For the token's fellow, fetch projects + eligible fellows and run `resolveProjectRole` per project. Build the set of *allowed* projection targets = the union of `targetFellowIds` across projects where the fellow is senior.
+- **Validate/drop entries before insert.** Reject or silently drop any non-self-report entry whose `(projectRecordId, targetFellowId)` is not in the allowed set. A self-report entry is always allowed for a project the fellow is on. This makes correctness independent of the form.
+- With entries validated, the conflict gate becomes "row is a projection" (`!sub.isSelfReport && sub.targetFellowId`) safely, because only a genuine senior can have produced such a row.
+- **Fix the symmetric self-report branch** (the block that, on a self-report, looks up existing projections targeting this fellow): filter those projections to ones authored by the *current* valid senior for that project, so a stale projection from a now-non-senior cannot email the wrong person.
+- **Idempotency guard** (pre-existing weakness, hardened here): the `conflicts` table has no unique constraint and two blocks can insert depending on arrival order. Before inserting, check for an existing `source='submission'` conflict for the same `(cycleId, projectRecordId, vpSubmissionId, associateSubmissionId)` and skip if present.
+
+Net effect: all conflicts on a mandate route to the senior (goals 2/3), second seniors never appear in a conflict, and no client payload can subvert it.
+
+### 7.7 `src/app/api/add-project/route.ts` (second submission path — must use the same rule)
+
+Mid-cycle "add a project" also writes submissions **and** creates conflicts at add-time, gated on global `isVp`. Because a pending project has no Airtable columns yet, its "senior" cannot come from placement; the creator defines the team ad hoc. Rule (explicit): **the creator is senior for a pending project iff they are an eligible VP/AVP** — i.e. keep the title-based decision *for pending projects only*, but centralize it through `project-role.ts` (a small `isPendingProjectSenior(designation)` helper) so both this route and the form's `myPendingProjects` branch in `page.tsx` agree. Validate posted teammate ids against the eligible-fellow set before inserting projections. This keeps the pending flow consistent with the real-project flow without inventing placement that doesn't exist.
+
+### 7.8 `src/lib/director-flag.ts` (`computeResolverForFlag`)
+
+Director-flag resolution currently routes by title: a VP/AVP self-resolves; otherwise the first VP/AVP on the project resolves. Under the new model this is wrong for an AVP sitting in an associate slot (e.g. Adit on Pant would self-resolve a flag though he's junior there). Change it to **placement-aware routing via the same `determineSenior`**: the flagged fellow self-resolves only if they are the project's senior; otherwise the project's senior resolves; else the flagged fellow; else admin. `computeResolverForFlag` already receives `projectVpAvpIds` and `allFellows`; pass `directorIds` too so the director-slot-lead fallback matches §6. This keeps "covered like an associate" consistent for flags, not just VP/self bandwidth conflicts.
+
+### 7.9 `src/lib/peer-bandwidth.ts` and `src/lib/email.ts`
 
 - Add the performed-role pill next to a person's name where their mandate role differs from their designation, in the conflict-resolution email and the peer-bandwidth email. Name label still shows the real designation.
-- These are computed at send time from live Airtable placement; no stored field needed.
+- Peer email needs per-project role context: extend `PeerProjectRow` with the viewer-independent performed role of the teammate on that project (computed at assembly time from `allProjects` placement). No stored field needed.
 
 ## 8. Data Flow
 
@@ -185,16 +201,30 @@ Unit tests for `project-role.ts` covering, with fixtures mirroring real records:
 - DDE (single VP/AVP) and Pitch (two VP/AVP slots) shapes.
 
 Integration-ish tests:
-- Submit route: senior projection vs associate self-report over threshold → one conflict, email to senior; second senior submits self → no conflict.
+- Submit route, **both arrival orders**: (a) senior projects first, associate self-reports later; (b) associate self-reports first, senior projects later → exactly one conflict either way, email to senior, idempotency guard prevents duplicates.
+- Submit route trust boundary: a payload containing a projection row from a *second senior* or an *associate* is dropped server-side → no submission, no conflict.
+- Second senior self-report while a senior projection exists for associate-slot occupants → no conflict involving the second senior.
+- `add-project`: creator who is an eligible VP/AVP → teammate projections + conflicts created; creator who is an associate → self-only, no projections; posted teammate ids validated against eligible set.
+- `director-flag` `computeResolverForFlag`: AVP flagged while in an associate slot → resolver is the mandate senior, not the AVP; AVP flagged while senior → self-resolves.
 - Form-entries: senior sees associate inputs; second senior and associate see self only.
 
-Regression: existing peer-bandwidth and signoff-scope tests still pass.
+Contract test:
+- Assert the rulebook VP/AVP field order for mandate (`VP / AVP 1` before `VP / AVP 2`) and pitch, since senior selection depends on `fetchAllProjects` preserving slot order. Fail loudly if the contract changes.
 
-## 12. Open Questions / Decisions for Review
+Regression: existing peer-bandwidth, projects-for-fellow, and signoff-scope tests still pass.
 
+## 12. Decisions & Open Questions
+
+Resolved (incorporated after Codex review):
+- **`project-role.ts` is the single source** for senior determination, allowed projection targets, display pills, and server-side entry validation. No caller re-implements the rule.
+- **Server is authoritative:** the submit and add-project routes validate posted entries against server-computed roles; the form is a convenience, never a trust boundary.
+- **Director-flag routing follows performed role**, not title (§7.8).
+- **Pending projects** keep a title-based senior test (creator is senior iff eligible VP/AVP), because a not-yet-in-Airtable project has no columns (§7.7).
+
+Open for reviewer/user confirmation:
 1. **"First eligible VP/AVP" vs "literal slot 1":** Spec uses first *eligible* VP/AVP as senior, so a Director wrongly placed in slot 1 is skipped in favour of an eligible AVP in slot 2. Confirm this is preferred over treating a non-eligible slot-1 occupant as senior (which would leave associates uncovered). Recommended: keep "first eligible".
-2. **Manually-added (pending) projects:** When a fellow adds a project mid-cycle, should the creator be treated as senior (project for the teammates they add) only when they are an eligible VP/AVP, mirroring §6? Recommended: yes, same rule.
-3. **Role pill when title == role:** Show the pill only when performed role differs from designation (less noise), vs always. Recommended: only when different.
+2. **Role pill when title == role:** Show the pill only when performed role differs from designation (less noise), vs always. Recommended: only when different.
+3. **Second-senior data hygiene:** if slot 1 holds a non-eligible Director and slot 2 an eligible AVP, the AVP becomes senior (correct), but this only surfaces if such rows are still active. Worth a one-time Airtable sweep, not code.
 
 ## 13. Rollout
 
