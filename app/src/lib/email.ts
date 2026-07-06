@@ -6,7 +6,13 @@ import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { renderTemplate, EMAIL_SUBJECTS, TYPE_LABELS, TYPE_LABELS_PLURAL, RESOLVER_LABELS, FLAG_ACTION_LABELS } from './templates';
 import { assemblePeerBandwidthData, buildPeerBandwidthEmailHtml } from '@/lib/peer-bandwidth';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazily instantiated so `next build` (which evaluates route modules to collect
+// page data) doesn't require RESEND_API_KEY at build time — only at send time.
+let _resend: Resend | null = null;
+function resendClient(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY);
+  return _resend;
+}
 const from = process.env.EMAIL_FROM || 'bandwidth@indigoedge.com';
 const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 
@@ -16,8 +22,8 @@ const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 const SUBJECTS = EMAIL_SUBJECTS;
 
 /** Send an email via Resend, throwing on failure. Returns the Resend message ID. */
-async function sendEmail(params: Parameters<typeof resend.emails.send>[0]): Promise<string | undefined> {
-  const { data, error } = await resend.emails.send(params);
+async function sendEmail(params: Parameters<Resend['emails']['send']>[0]): Promise<string | undefined> {
+  const { data, error } = await resendClient().emails.send(params);
   if (error) throw new Error(`Resend error: ${error.message}`);
   return data?.id;
 }
