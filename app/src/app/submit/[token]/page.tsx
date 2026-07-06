@@ -2,10 +2,11 @@ import { db } from '@/lib/db';
 import { tokens, pendingProjects, submissions } from '@/lib/db/schema';
 import { eq, and, like } from 'drizzle-orm';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
-import { fetchEligibleFellows, isVpOrAvp, fetchDirectors } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
 import { notFound, redirect } from 'next/navigation';
 import { SubmissionForm } from './form';
 import { buildFormProjects } from './build-form-projects';
+import { isPendingProjectSenior } from '@/lib/project-role';
 
 export default async function SubmitPage({
   params,
@@ -50,7 +51,7 @@ export default async function SubmitPage({
   ]);
 
   const fellowProjects = getProjectsForFellow(projects, tokenRecord.fellowRecordId, tokenRecord.fellowDesignation);
-  const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
+  const canProjectForPending = isPendingProjectSenior(tokenRecord.fellowDesignation);
 
   const fellowRecordId = tokenRecord.fellowRecordId;
 
@@ -73,7 +74,7 @@ export default async function SubmitPage({
         ? [creatorId, ...otherIds.filter(id => id !== creatorId)]
         : otherIds;
 
-      const associates = isVp
+      const associates = canProjectForPending
         ? teammateIds
             .map(id => fellows.find(f => f.recordId === id))
             .filter((f): f is NonNullable<typeof f> => f != null)
@@ -117,7 +118,7 @@ export default async function SubmitPage({
       <SubmissionForm
         token={tokenValue}
         fellowName={tokenRecord.fellowName}
-        isVp={isVp}
+        isVp={canProjectForPending}
         projects={allProjectsForForm}
         directors={directors}
         fellowOptions={fellowOptions}

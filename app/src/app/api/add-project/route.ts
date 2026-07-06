@@ -7,7 +7,8 @@ import { isConflict } from '@/lib/conflicts';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { sendConflictEmail } from '@/lib/email';
 import { postNewProject } from '@/lib/slack';
-import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows } from '@/lib/airtable/fellows';
+import { isPendingProjectSenior } from '@/lib/project-role';
 
 type ProjectType = 'mandate' | 'dde' | 'pitch';
 
@@ -73,13 +74,14 @@ export async function POST(req: NextRequest) {
       isSelfReport: true,
     });
 
-  const isVp = isVpOrAvp(tokenRecord.fellowDesignation);
+  const creatorIsSenior = isPendingProjectSenior(tokenRecord.fellowDesignation);
   const fellows = await fetchEligibleFellows();
   const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
 
   const teammateBandwidthForSlack: Array<{ name: string; hoursPerWeek: number }> = [];
-  if (isVp && payload.teammateBandwidth && payload.teammateBandwidth.length > 0) {
+  if (creatorIsSenior && payload.teammateBandwidth && payload.teammateBandwidth.length > 0) {
     for (const tb of payload.teammateBandwidth) {
+      if (!fellowMap.has(tb.recordId)) continue; // reject unknown / ineligible teammate ids
       const tbHpd = normalizeToHoursPerDay(tb.value, tb.unit);
       const tbHpw = normalizeToHoursPerWeek(tb.value, tb.unit);
 

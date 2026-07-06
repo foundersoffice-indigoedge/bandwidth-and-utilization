@@ -4,6 +4,7 @@ import {
   resolveProjectRole,
   computeAllowedTargets,
   isAllowedSubmissionEntry,
+  isPendingProjectSenior,
 } from '../src/lib/project-role';
 import type { ProjectAssignment } from '../src/types';
 
@@ -90,5 +91,13 @@ describe('isAllowedSubmissionEntry', () => {
   });
   it('rejects a projection where the fellow is only an associate (p2)', () => {
     expect(isAllowedSubmissionEntry({ projectRecordId: 'p2', targetFellowId: 'recSomeone' }, allowed, onProjects)).toBe(false);
+  });
+});
+
+describe('isPendingProjectSenior', () => {
+  it('true for VP and AVP, false for associates', () => {
+    expect(isPendingProjectSenior('VP')).toBe(true);
+    expect(isPendingProjectSenior('AVP')).toBe(true);
+    expect(isPendingProjectSenior('Associate 2')).toBe(false);
   });
 });
