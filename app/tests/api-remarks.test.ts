@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const claimUpdate = vi.fn();
+const processedUpdate = vi.fn();
+let processedTargetRows: Array<{ cycleId: string; fellowRecordId: string; remarks: string | null }> = [];
 
 vi.mock('@/lib/db', () => {
   const candidateRows = [
@@ -53,6 +55,21 @@ vi.mock('@/lib/db', () => {
 
   const db = {
     transaction: (cb: (t: typeof tx) => unknown) => cb(tx),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => processedTargetRows,
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: (...a: unknown[]) => {
+          processedUpdate(...a);
+          return Promise.resolve();
+        },
+      }),
+    }),
   };
 
   return { db };
@@ -62,6 +79,8 @@ beforeEach(() => {
   process.env.BT_INTEGRATION_SECRET = 'sek';
   process.env.REMARKS_CUTOVER = '2026-07-06';
   claimUpdate.mockClear();
+  processedUpdate.mockClear();
+  processedTargetRows = [];
 });
 
 describe('GET /api/admin/remarks', () => {
@@ -79,5 +98,24 @@ describe('GET /api/admin/remarks', () => {
     expect(body.rows[0].submissionId).toBe('s1');
     expect(body.rows[0].siblingSubmissionIds).toEqual(['s2']);
     expect(claimUpdate).toHaveBeenCalled();
+  });
+});
+
+describe('POST processed', () => {
+  it('401s without secret', async () => {
+    const { POST } = await import('@/app/api/admin/remarks/[submissionId]/processed/route');
+    const res = await POST(new Request('http://x', { method: 'POST' }), { params: Promise.resolve({ submissionId: 's1' }) });
+    expect(res.status).toBe(401);
+  });
+
+  it('is a no-op when the submission is gone', async () => {
+    const { POST } = await import('@/app/api/admin/remarks/[submissionId]/processed/route');
+    const res = await POST(
+      new Request('http://x', { method: 'POST', headers: { authorization: 'Bearer sek' } }),
+      { params: Promise.resolve({ submissionId: 's1' }) },
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true });
+    expect(processedUpdate).not.toHaveBeenCalled();
   });
 });
