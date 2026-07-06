@@ -205,3 +205,44 @@ describe('assemblePeerBandwidthData submission status', () => {
     expect(priyaModel.pendingFellowNames).toEqual([]);
   });
 });
+
+describe('assemblePeerBandwidthData — performed-role label', () => {
+  it('labels a VP/AVP in an associate slot "acting as Associate" without changing designation', () => {
+    const otherVp: Fellow = { recordId: 'recOtherVp', name: 'Vik', email: 'vik@ie.com', designation: 'VP' };
+    const teammate: Fellow = { recordId: 'recTeammate', name: 'Adit', email: 'adit@ie.com', designation: 'AVP' };
+    const localFellows = [otherVp, teammate];
+    const localProjects = [
+      {
+        projectRecordId: 'recShared',
+        projectName: 'Shared Mandate',
+        projectType: 'mandate' as const,
+        stage: 'In Progress',
+        vpAvpIds: ['recOtherVp'],       // eligible VP/AVP senior
+        associateIds: ['recTeammate'],  // AVP sitting in the associate slot
+        directorIds: [],
+        isVpRun: false,
+      },
+    ];
+    const subs = [
+      { fellowRecordId: 'recOtherVp', projectRecordId: 'recShared', projectName: 'Shared Mandate', projectType: 'mandate', hoursPerWeek: 20, hoursPerDay: 20 / 6, isSelfReport: true },
+      { fellowRecordId: 'recTeammate', projectRecordId: 'recShared', projectName: 'Shared Mandate', projectType: 'mandate', hoursPerWeek: 15, hoursPerDay: 15 / 6, isSelfReport: true },
+    ];
+    const models = assemblePeerBandwidthData(subs, localFellows, localProjects, 'Jul 6 – Jul 12, 2026', new Set());
+
+    const teammateRow = models
+      .flatMap(m => m.teammates)
+      .find(t => t.recordId === 'recTeammate')!
+      .projects.find(p => p.projectRecordId === 'recShared')!;
+    expect(teammateRow.performedRoleLabel).toBe('acting as Associate');
+
+    const tm = models.flatMap(m => m.teammates).find(t => t.recordId === 'recTeammate')!;
+    expect(tm.designation).toBe('AVP'); // designation label unchanged
+
+    // The senior (VP in the VP/AVP slot) is NOT acting-as-associate:
+    const vpRow = models
+      .flatMap(m => m.teammates)
+      .find(t => t.recordId === 'recOtherVp')!
+      .projects.find(p => p.projectRecordId === 'recShared')!;
+    expect(vpRow.performedRoleLabel).toBeNull();
+  });
+});

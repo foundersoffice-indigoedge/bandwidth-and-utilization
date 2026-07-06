@@ -8,6 +8,8 @@
 import type { Fellow, ProjectAssignment, ProjectType, LoadTag } from '@/types';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { WEEKLY_CAPACITY_HOURS, calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
+import { resolveProjectRole } from '@/lib/project-role';
+import { isVpOrAvp } from '@/lib/airtable/fellows';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +23,8 @@ export interface PeerProjectRow {
   hoursPerWeek: number;
   /** True when the recipient is also on this project. */
   shared: boolean;
+  /** "acting as Associate" when a VP/AVP sits in an associate slot here; else null. */
+  performedRoleLabel: string | null;
 }
 
 export type SubmissionStatus = 'submitted' | 'pending';
@@ -99,6 +103,10 @@ export function assemblePeerBandwidthData(
 ): PeerEmailModel[] {
   const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
   const eligibleIds = new Set(fellows.map(f => f.recordId));
+  const isEligible = (id: string) => {
+    const f = fellowMap.get(id);
+    return !!f && isVpOrAvp(f.designation);
+  };
 
   // --- Build per-fellow load data ---
   interface FellowLoad {
@@ -120,6 +128,9 @@ export function assemblePeerBandwidthData(
 
     const projects: PeerProjectRow[] = selfSubs.map(s => {
       const proj = allProjects.find(p => p.projectRecordId === s.projectRecordId);
+      const role = proj ? resolveProjectRole(proj, fellow.recordId, isEligible).role : 'associate';
+      const performedRoleLabel =
+        role === 'associate' && isVpOrAvp(fellow.designation) ? 'acting as Associate' : null;
       return {
         projectRecordId: s.projectRecordId,
         projectName: s.projectName,
@@ -127,6 +138,7 @@ export function assemblePeerBandwidthData(
         stage: proj?.stage ?? '',
         hoursPerWeek: normalizeHpw(s.hoursPerWeek, s.hoursPerDay),
         shared: false, // placeholder; filled per-recipient below
+        performedRoleLabel,
       };
     });
 
@@ -331,8 +343,11 @@ export function buildPeerBandwidthEmailHtml(
         ? `<span style="background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;margin-left:6px">shared</span>`
         : '';
       const typeLabel = TYPE_LABELS[p.projectType] ?? p.projectType;
+      const pill = p.performedRoleLabel
+        ? ` <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px">${p.performedRoleLabel}</span>`
+        : '';
       return `<tr style="background:${rowBg}">
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.projectName}${sharedBadge}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px">${p.projectName}${sharedBadge}${pill}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280">${typeLabel} &middot; ${p.stage || '—'}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;text-align:right;font-weight:500">${p.hoursPerWeek.toFixed(1)} h/wk</td>
       </tr>`;
