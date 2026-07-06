@@ -139,6 +139,8 @@ const makeSubmission = (
   targetFellowId: null,
   remarks: null,
   hoursPerWeek: hoursPerDay * 6,
+  remarksClaimedAt: null,
+  remarksProcessedAt: null,
 });
 
 const directorProject = baseProject('p1', {
