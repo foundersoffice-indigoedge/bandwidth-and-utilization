@@ -136,9 +136,13 @@ export async function sendConflictEmail(
   projectName: string,
   vpHours: number,
   associateHours: number,
-  resolutionToken: string
+  resolutionToken: string,
+  associateRoleLabel?: string,
 ): Promise<string | undefined> {
   const appUrl = process.env.APP_URL;
+  const roleTag = associateRoleLabel
+    ? ` <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px">${associateRoleLabel}</span>`
+    : '';
 
   return await sendEmail({
     from,
@@ -147,7 +151,7 @@ export async function sendConflictEmail(
     subject: renderTemplate(SUBJECTS.conflict, { projectName }),
     html: `
       <p>Hi ${vpName},</p>
-      <p>On <strong>${projectName}</strong>, you reported ${associateName} will spend <strong>${vpHours} hrs/day</strong>, but ${associateName} reported <strong>${associateHours} hrs/day</strong>.</p>
+      <p>On <strong>${projectName}</strong>, you reported ${associateName}${roleTag} will spend <strong>${vpHours} hrs/day</strong>, but ${associateName} reported <strong>${associateHours} hrs/day</strong>.</p>
       <p>Please confirm the accurate number:</p>
       <div style="margin:16px 0">
         <a href="${appUrl}/resolve/${resolutionToken}?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">${associateName}'s number (${associateHours} hrs/day)</a>

@@ -73,6 +73,10 @@ describe('U5 golden — email senders', () => {
       { name: 'Asha', designation: 'Associate 2', utilizationPct: 0.5, loadTag: 'Comfortable', projectCount: 3, totalHoursPerWeek: 42 },
       { name: 'Ravi', designation: 'AVP', utilizationPct: 0.95, loadTag: 'At Capacity', projectCount: 5, totalHoursPerWeek: 80 },
     ]);
+    // Conflict email where the associate is a VP/AVP performing an associate role.
+    await email.sendConflictEmail('Ravi', 'ravi@indigoedge.com', 'Asha', 'asha@indigoedge.com', 'Acme', 5, 3, 'rtok', 'acting as Associate');
+    const labeled = sent[sent.length - 1];
+    expect(labeled.html).toContain('acting as Associate');
     expect(sent).toMatchSnapshot();
   });
 });

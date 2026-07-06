@@ -7,7 +7,7 @@ import { isConflict } from '@/lib/conflicts';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { sendConflictEmail } from '@/lib/email';
 import { postNewProject } from '@/lib/slack';
-import { fetchEligibleFellows } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 import { isPendingProjectSenior } from '@/lib/project-role';
 
 type ProjectType = 'mandate' | 'dde' | 'pitch';
@@ -135,10 +135,12 @@ export async function POST(req: NextRequest) {
             })
             .returning();
 
+          const teammateRoleLabel = isVpOrAvp(teammate.designation) ? 'acting as Associate' : undefined;
           const emailId = await sendConflictEmail(
             tokenRecord.fellowName, tokenRecord.fellowEmail,
             teammate.name, teammate.email,
             payload.name.trim(), tbHpd, existingSelf.hoursPerDay, resToken,
+            teammateRoleLabel,
           );
           if (emailId) {
             await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.id, conflictRow.id));

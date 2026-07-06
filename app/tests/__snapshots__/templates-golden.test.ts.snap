@@ -369,6 +369,26 @@ exports[`U5 golden — email senders > renders all email payloads byte-stable 1`
     "subject": "Bandwidth Cycle 4 May – 10 May 2026 — Complete",
     "to": "ajder@indigoedge.com",
   },
+  {
+    "cc": [
+      "asha@indigoedge.com",
+      "ajder@indigoedge.com",
+      "pai@indigoedge.com",
+    ],
+    "from": "bandwidth@indigoedge.com",
+    "html": "
+      <p>Hi Ravi,</p>
+      <p>On <strong>Acme</strong>, you reported Asha <span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-size:10px">acting as Associate</span> will spend <strong>5 hrs/day</strong>, but Asha reported <strong>3 hrs/day</strong>.</p>
+      <p>Please confirm the accurate number:</p>
+      <div style="margin:16px 0">
+        <a href="https://util.test/resolve/rtok?action=use_associate" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">Asha's number (3 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=use_vp" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:8px">My number (5 hrs/day)</a>
+        <a href="https://util.test/resolve/rtok?action=custom" style="display:inline-block;background:#6b7280;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Enter a different number</a>
+      </div>
+    ",
+    "subject": "Bandwidth Conflict — Acme",
+    "to": "ravi@indigoedge.com",
+  },
 ]
 `;
 

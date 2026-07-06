@@ -200,6 +200,7 @@ export async function POST(req: NextRequest) {
 
         const assocFellow = fellowMap.get(sub.targetFellowId);
         if (assocFellow) {
+          const assocRoleLabel = isVpOrAvp(assocFellow.designation) ? 'acting as Associate' : undefined;
           const emailId = await sendConflictEmail(
             tokenRecord.fellowName,
             tokenRecord.fellowEmail,
@@ -208,7 +209,8 @@ export async function POST(req: NextRequest) {
             sub.projectName!,
             sub.hoursPerDay!,
             assocSub.hoursPerDay,
-            resToken
+            resToken,
+            assocRoleLabel,
           );
           if (emailId) {
             await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.resolutionToken, resToken));
@@ -260,6 +262,7 @@ export async function POST(req: NextRequest) {
               resolutionToken: resToken,
             });
 
+            const selfRoleLabel = isVpOrAvp(tokenRecord.fellowDesignation) ? 'acting as Associate' : undefined;
             const emailId = await sendConflictEmail(
               vpFellow.name,
               vpFellow.email,
@@ -268,7 +271,8 @@ export async function POST(req: NextRequest) {
               sub.projectName!,
               vpSub.hoursPerDay,
               sub.hoursPerDay!,
-              resToken
+              resToken,
+              selfRoleLabel,
             );
             if (emailId) {
               await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.resolutionToken, resToken));
