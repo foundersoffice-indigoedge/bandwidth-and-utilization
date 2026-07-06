@@ -5,6 +5,7 @@ import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects'
 import { fetchEligibleFellows, isVpOrAvp, fetchDirectors } from '@/lib/airtable/fellows';
 import { notFound, redirect } from 'next/navigation';
 import { SubmissionForm } from './form';
+import { buildFormProjects } from './build-form-projects';
 
 export default async function SubmitPage({
   params,
@@ -53,38 +54,12 @@ export default async function SubmitPage({
 
   const fellowRecordId = tokenRecord.fellowRecordId;
 
-  const projectsWithAssociates = fellowProjects.map(project => {
-    const isVpRunMandate = project.projectType === 'mandate' && project.isVpRun === true;
-    const isLeadVp = isVpRunMandate && project.leadFellowRecordId === fellowRecordId;
-
-    let targetIds: string[] = [];
-    if (isVpRunMandate && !isLeadVp) {
-      // VP2 or associate on a VP-run mandate — self only
-      targetIds = [];
-    } else if (isLeadVp) {
-      // VP1 — project for VP2 + every associate
-      const otherVpIds = project.vpAvpIds.filter(id => id !== fellowRecordId);
-      targetIds = [...otherVpIds, ...project.associateIds];
-    } else if (isVp) {
-      // Non-VP-run: VP/AVP projects for associates (unchanged)
-      targetIds = project.associateIds;
-    }
-
-    const associates = targetIds
-      .map(id => fellows.find(f => f.recordId === id))
-      .filter((f): f is NonNullable<typeof f> => f != null)
-      .map(f => ({ recordId: f.recordId, name: f.name }));
-
-    return {
-      projectRecordId: project.projectRecordId,
-      projectName: project.projectName,
-      projectType: project.projectType,
-      stage: project.stage,
-      associates,
-      isVpRun: project.isVpRun,
-      leadFellowName: project.leadFellowName,
-    };
-  });
+  const projectsWithAssociates = buildFormProjects(
+    fellowProjects,
+    tokenRecord.fellowRecordId,
+    tokenRecord.fellowDesignation,
+    fellows,
+  );
 
   const myPendingProjects = cyclePending
     .filter(p =>
