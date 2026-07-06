@@ -18,6 +18,7 @@ interface Project {
   associates: Associate[];
   isVpRun?: boolean;
   leadFellowName?: string;
+  performedRoleLabel?: string | null;
   isNew?: boolean;
 }
 
@@ -135,8 +136,16 @@ export function SubmissionForm({
                     )}
                     {project.isVpRun && (
                       <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-medium">
-                        VP-run{project.leadFellowName ? ` · Led by ${project.leadFellowName}` : ''}
+                        VP-run
                       </span>
+                    )}
+                    {project.performedRoleLabel && (
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-medium">
+                        {project.performedRoleLabel}
+                      </span>
+                    )}
+                    {project.leadFellowName && (
+                      <span className="text-xs text-gray-500">Led by {project.leadFellowName}</span>
                     )}
                   </div>
 
