@@ -340,6 +340,7 @@ export async function submitFlags(params: {
         name: item.flaggedFellow.name,
       },
       projectVpAvpIds: item.project.vpAvpIds,
+      projectDirectorIds: item.project.directorIds,
       allFellows: fellows.map(f => ({ recordId: f.recordId, designation: f.designation, email: f.email, name: f.name })),
       adminEmail,
     });
