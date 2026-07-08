@@ -10,6 +10,7 @@ import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { WEEKLY_CAPACITY_HOURS, calculateHoursUtilization, getLoadTag } from '@/lib/utilization';
 import { resolveProjectRole } from '@/lib/project-role';
 import { isVpOrAvp } from '@/lib/airtable/fellows';
+import { filterLiveSelfReports } from '@/lib/airtable/projects';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -121,8 +122,14 @@ export function assemblePeerBandwidthData(
   const fellowLoads = new Map<string, FellowLoad>();
 
   for (const fellow of fellows) {
-    const selfSubs = allSubmissions.filter(
-      s => s.isSelfReport && s.fellowRecordId === fellow.recordId,
+    // Live-cycle reconciliation: drop self-reports whose project is deleted, now at an
+    // inactive stage, or that this fellow has been reassigned off of. Pending mid-cycle
+    // projects are kept. History is never filtered this way.
+    const selfSubs = filterLiveSelfReports(
+      allSubmissions.filter(s => s.isSelfReport && s.fellowRecordId === fellow.recordId),
+      allProjects,
+      fellow.recordId,
+      fellow.designation,
     );
     const submissionStatus: SubmissionStatus = pendingFellowIds.has(fellow.recordId) ? 'pending' : 'submitted';
 

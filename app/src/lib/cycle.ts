@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
-import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
+import { fetchAllProjects, getProjectsForFellow, filterLiveSelfReports } from '@/lib/airtable/projects';
 import { getExpectedDirectorIds } from '@/lib/signoff-scope';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
@@ -224,8 +224,16 @@ async function finalizeCycle(cycleId: string): Promise<void> {
   const fellowSummaries: FellowSummary[] = [];
 
   for (const fellow of fellows) {
-    const fellowSubs = allSubmissions.filter(
-      s => s.fellowRecordId === fellow.recordId && s.isSelfReport
+    // Reconcile before freezing the snapshot: drop self-reports whose project is deleted,
+    // now at an inactive stage, or that the fellow was reassigned off of. Pending projects
+    // are kept. The snapshot is this cycle's permanent utilization record, so the totals and
+    // breakdown must exclude orphaned rows. (Applies to the live cycle being finalized only —
+    // past snapshots are already frozen and untouched.)
+    const fellowSubs = filterLiveSelfReports(
+      allSubmissions.filter(s => s.fellowRecordId === fellow.recordId && s.isSelfReport),
+      allProjects,
+      fellow.recordId,
+      fellow.designation,
     );
     if (fellowSubs.length === 0) continue;
 

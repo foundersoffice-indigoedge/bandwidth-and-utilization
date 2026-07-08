@@ -5,7 +5,7 @@ import { DashboardView } from './DashboardView';
 import { calculateHoursUtilization, getLoadTag, INVESTMENT_YEAR_START_MONTH } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
-import { fetchAllProjects } from '@/lib/airtable/projects';
+import { fetchAllProjects, filterLiveSelfReports } from '@/lib/airtable/projects';
 import { fetchDirectors } from '@/lib/airtable/fellows';
 
 export const dynamic = 'force-dynamic';
@@ -205,7 +205,15 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
 
   const submittedFellows: LiveFellowData[] = submittedTokens
     .map((t): LiveFellowResult => {
-      const fellowSubs = subsByFellow.get(t.fellowRecordId) || [];
+      // Live-cycle reconciliation: drop self-reports whose project is deleted, now at an
+      // inactive stage, or that this fellow was reassigned off of (pending kept). Keeps the
+      // live utilization total honest. History (snapshots) is untouched.
+      const fellowSubs = filterLiveSelfReports(
+        subsByFellow.get(t.fellowRecordId) || [],
+        allProjects,
+        t.fellowRecordId,
+        t.fellowDesignation,
+      );
       if (fellowSubs.length === 0) return null;
 
       const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);

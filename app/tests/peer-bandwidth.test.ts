@@ -269,10 +269,13 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .flatMap(m => m.teammates)
       .filter(t => t.recordId === 'recVP')
       .flatMap(t => t.projects);
-    const pending = vpProjects.find(p => p.projectRecordId === 'pending_abc')!;
-    const stale = vpProjects.find(p => p.projectRecordId === 'recStaleXYZ')!;
-    expect(pending.performedRoleLabel).toBeNull();
-    expect(stale.performedRoleLabel).toBeNull();
+    // The stale/deleted project is dropped from the live email entirely; the mid-cycle
+    // pending project stays, with no false label.
+    const pending = vpProjects.find(p => p.projectRecordId === 'pending_abc');
+    const stale = vpProjects.find(p => p.projectRecordId === 'recStaleXYZ');
+    expect(stale).toBeUndefined();
+    expect(pending).toBeDefined();
+    expect(pending!.performedRoleLabel).toBeNull();
   });
 
   it('does NOT label a VP/AVP who was swapped off the project team mid-cycle (found, but not in associateIds)', () => {
@@ -300,7 +303,9 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .flatMap(m => m.teammates)
       .filter(t => t.recordId === 'recMurali')
       .flatMap(t => t.projects)
-      .find(p => p.projectRecordId === 'recPlatinum')!;
-    expect(platinumRow.performedRoleLabel).toBeNull();
+      .find(p => p.projectRecordId === 'recPlatinum');
+    // Murali was swapped off the team mid-cycle, so his stale row is dropped from the live
+    // email entirely (not merely unlabeled).
+    expect(platinumRow).toBeUndefined();
   });
 });

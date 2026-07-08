@@ -111,3 +111,33 @@ export function getProjectsForFellow(
       (leadsFromDirectorSlot && p.directorIds.includes(fellowRecordId))
   );
 }
+
+/**
+ * Reconcile a fellow's self-reports for the CURRENT cycle's live views (peer email, live
+ * dashboard, and the snapshot frozen at finalization). A self-report is kept only when:
+ *   - it's a mid-cycle "pending_" project (a deliberate add — always kept), or
+ *   - its project is one `getProjectsForFellow` currently returns, i.e. still at an active
+ *     stage AND the fellow is still on its team.
+ * This drops rows (and their hours) for projects that were deleted, moved to an inactive
+ * stage, or that the fellow was reassigned off of after submitting.
+ *
+ * IMPORTANT: apply this to the LIVE cycle only. Historical cycles (past snapshots, the
+ * project drill-down) must keep their submissions as recorded — people really did spend
+ * that time on those projects when the cycle ran, even if the project is now gone.
+ *
+ * `activeProjects` must be the active-stage set from `fetchAllProjects()` (already
+ * stage-filtered), so a project absent from it is treated as deleted/inactive.
+ */
+export function filterLiveSelfReports<T extends { projectRecordId: string }>(
+  selfReports: T[],
+  activeProjects: ProjectAssignment[],
+  fellowRecordId: string,
+  fellowDesignation: string
+): T[] {
+  const onIds = new Set(
+    getProjectsForFellow(activeProjects, fellowRecordId, fellowDesignation).map(p => p.projectRecordId)
+  );
+  return selfReports.filter(
+    s => s.projectRecordId.startsWith('pending_') || onIds.has(s.projectRecordId)
+  );
+}
