@@ -128,9 +128,17 @@ export function assemblePeerBandwidthData(
 
     const projects: PeerProjectRow[] = selfSubs.map(s => {
       const proj = allProjects.find(p => p.projectRecordId === s.projectRecordId);
-      const role = proj ? resolveProjectRole(proj, fellow.recordId, isEligible).role : 'associate';
+      const role = proj ? resolveProjectRole(proj, fellow.recordId, isEligible).role : null;
+      // Label a VP/AVP "Performing Associate role" ONLY when they are AFFIRMATIVELY in this
+      // project's associate column. 'associate' is a catch-all in resolveProjectRole — it is
+      // returned for anyone not in a senior slot — so without the associateIds check a VP was
+      // falsely tagged whenever (a) the project was missing from the fetch (pending / stage-
+      // excluded → role null), or (b) the fellow had been swapped off the project's team mid-
+      // cycle (role 'associate' by elimination, but they're not really an associate here).
       const performedRoleLabel =
-        role === 'associate' && isVpOrAvp(fellow.designation) ? 'Performing Associate role' : null;
+        role === 'associate' && !!proj && proj.associateIds.includes(fellow.recordId) && isVpOrAvp(fellow.designation)
+          ? 'Performing Associate role'
+          : null;
       return {
         projectRecordId: s.projectRecordId,
         projectName: s.projectName,

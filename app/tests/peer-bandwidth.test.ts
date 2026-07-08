@@ -245,4 +245,62 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .projects.find(p => p.projectRecordId === 'recShared')!;
     expect(vpRow.performedRoleLabel).toBeNull();
   });
+
+  it('does NOT label a VP/AVP whose project is missing from allProjects (pending / stage-excluded)', () => {
+    // Regression: a self-report whose projectRecordId is absent from allProjects
+    // (a mid-cycle "pending_" project, or a real project filtered out by the active-stage
+    // gate) must NOT be treated as an associate role. The role is unknown, not associate.
+    const vp: Fellow = { recordId: 'recVP', name: 'Mitul', email: 'm@ie.com', designation: 'VP' };
+    const otherVp: Fellow = { recordId: 'recOther', name: 'Peer', email: 'p@ie.com', designation: 'VP' };
+    const localFellows = [vp, otherVp];
+    // Only the shared project is in allProjects; the pending + stage-excluded ones are NOT.
+    const sharedProj = {
+      projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate' as const,
+      stage: 'In GTM', vpAvpIds: ['recVP', 'recOther'], associateIds: [], directorIds: [], isVpRun: false,
+    };
+    const subs = [
+      { fellowRecordId: 'recVP', projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate', hoursPerWeek: 10, hoursPerDay: 10 / 6, isSelfReport: true },
+      { fellowRecordId: 'recVP', projectRecordId: 'pending_abc', projectName: 'PlatinumRx', projectType: 'pitch', hoursPerWeek: 5, hoursPerDay: 5 / 6, isSelfReport: true },
+      { fellowRecordId: 'recVP', projectRecordId: 'recStaleXYZ', projectName: 'Foxtale', projectType: 'mandate', hoursPerWeek: 3, hoursPerDay: 3 / 6, isSelfReport: true },
+      { fellowRecordId: 'recOther', projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate', hoursPerWeek: 8, hoursPerDay: 8 / 6, isSelfReport: true },
+    ];
+    const models = assemblePeerBandwidthData(subs, localFellows, [sharedProj], 'range', new Set());
+    const vpProjects = models
+      .flatMap(m => m.teammates)
+      .filter(t => t.recordId === 'recVP')
+      .flatMap(t => t.projects);
+    const pending = vpProjects.find(p => p.projectRecordId === 'pending_abc')!;
+    const stale = vpProjects.find(p => p.projectRecordId === 'recStaleXYZ')!;
+    expect(pending.performedRoleLabel).toBeNull();
+    expect(stale.performedRoleLabel).toBeNull();
+  });
+
+  it('does NOT label a VP/AVP who was swapped off the project team mid-cycle (found, but not in associateIds)', () => {
+    // Regression for the PlatinumRx Pitch case: Murali (VP) reported on the project when he
+    // was its VP; the Airtable team was then edited (he was replaced). At peer-email time the
+    // project IS found, but he is in neither the VP nor the associate column. resolveProjectRole
+    // returns 'associate' by elimination — the label must NOT fire, because he isn't actually
+    // in the associate slot.
+    const swappedVp: Fellow = { recordId: 'recMurali', name: 'Murali', email: 'mu@ie.com', designation: 'VP' };
+    const peer: Fellow = { recordId: 'recPeer', name: 'Peer', email: 'pe@ie.com', designation: 'VP' };
+    const localFellows = [swappedVp, peer];
+    // Murali is NOT on recPlatinum anymore (a different VP + associate hold the slots), but he
+    // co-occurs with `peer` on recShared so he shows up as a teammate.
+    const projects = [
+      { projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate' as const, stage: 'In GTM', vpAvpIds: ['recMurali', 'recPeer'], associateIds: [], directorIds: [], isVpRun: false },
+      { projectRecordId: 'recPlatinum', projectName: 'PlatinumRx Pitch', projectType: 'pitch' as const, stage: 'Pitch Work in Progress', vpAvpIds: ['recNewVp'], associateIds: ['recYajur'], directorIds: [], isVpRun: false },
+    ];
+    const subs = [
+      { fellowRecordId: 'recMurali', projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate', hoursPerWeek: 10, hoursPerDay: 10 / 6, isSelfReport: true },
+      { fellowRecordId: 'recMurali', projectRecordId: 'recPlatinum', projectName: 'PlatinumRx Pitch', projectType: 'pitch', hoursPerWeek: 0, hoursPerDay: 0, isSelfReport: true },
+      { fellowRecordId: 'recPeer', projectRecordId: 'recShared', projectName: 'Shared', projectType: 'mandate', hoursPerWeek: 8, hoursPerDay: 8 / 6, isSelfReport: true },
+    ];
+    const models = assemblePeerBandwidthData(subs, localFellows, projects, 'range', new Set());
+    const platinumRow = models
+      .flatMap(m => m.teammates)
+      .filter(t => t.recordId === 'recMurali')
+      .flatMap(t => t.projects)
+      .find(p => p.projectRecordId === 'recPlatinum')!;
+    expect(platinumRow.performedRoleLabel).toBeNull();
+  });
 });
