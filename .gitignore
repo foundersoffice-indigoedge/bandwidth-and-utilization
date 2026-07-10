@@ -5,6 +5,7 @@
 # Local tool caches
 .superpowers/
 .worktrees/
+.pnpm-store/
 
 # Vercel local cache
 .vercel
