@@ -4,6 +4,7 @@
 
 # Local tool caches
 .superpowers/
+.worktrees/
 
 # Vercel local cache
 .vercel
