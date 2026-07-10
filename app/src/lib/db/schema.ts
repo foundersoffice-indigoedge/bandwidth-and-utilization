@@ -96,6 +96,7 @@ export const snapshots = pgTable('snapshots', {
   totalHoursPerWeek: real('total_hours_per_week'),
   hoursUtilizationPct: real('hours_utilization_pct'),
   hoursLoadTag: text('hours_load_tag'),
+  excludedProjectCount: integer('excluded_project_count').notNull().default(0),
 });
 
 export const pendingProjects = pgTable('pending_projects', {

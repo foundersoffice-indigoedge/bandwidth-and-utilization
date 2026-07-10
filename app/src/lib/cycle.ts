@@ -2,11 +2,11 @@ import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
-import { fetchAllProjects, getProjectsForFellow, filterLiveSelfReports } from '@/lib/airtable/projects';
+import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { getExpectedDirectorIds } from '@/lib/signoff-scope';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
-import { getLoadTag, calculateHoursUtilization } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
+import { buildReconciledUtilization } from '@/lib/reconciled-utilization';
 import type { ProjectType, ProjectBreakdownItem } from '@/types';
 export { isCycleMonday } from '@/lib/schedule';
 
@@ -229,17 +229,24 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     // are kept. The snapshot is this cycle's permanent utilization record, so the totals and
     // breakdown must exclude orphaned rows. (Applies to the live cycle being finalized only —
     // past snapshots are already frozen and untouched.)
-    const fellowSubs = filterLiveSelfReports(
-      allSubmissions.filter(s => s.fellowRecordId === fellow.recordId && s.isSelfReport),
+    const rawSelfReports = allSubmissions.filter(
+      submission => submission.fellowRecordId === fellow.recordId && submission.isSelfReport,
+    );
+    const utilization = buildReconciledUtilization(
+      rawSelfReports,
       allProjects,
       fellow.recordId,
       fellow.designation,
     );
-    if (fellowSubs.length === 0) continue;
+    if (!utilization) continue;
 
-    const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
-    const hoursUtilPct = calculateHoursUtilization(totalHpw);
-    const hoursTag = getLoadTag(hoursUtilPct);
+    const {
+      submissions: fellowSubs,
+      excludedProjectCount,
+      totalHoursPerWeek: totalHpw,
+      hoursUtilizationPct: hoursUtilPct,
+      loadTag: hoursTag,
+    } = utilization;
 
     const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => {
       const proj = projectMap.get(s.projectRecordId);
@@ -263,6 +270,7 @@ async function finalizeCycle(cycleId: string): Promise<void> {
       totalHoursPerWeek: totalHpw,
       hoursUtilizationPct: hoursUtilPct,
       hoursLoadTag: hoursTag,
+      excludedProjectCount,
     });
 
     fellowSummaries.push({
