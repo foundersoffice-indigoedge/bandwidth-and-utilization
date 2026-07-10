@@ -7,8 +7,7 @@ import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { fetchDirectors } from '@/lib/airtable/fellows';
-import { buildReconciledUtilization } from '@/lib/reconciled-utilization';
-import { findSubmissionRemarks } from '@/lib/dashboard-reconciliation';
+import { buildLiveDashboardFellow } from '@/lib/live-dashboard-fellow';
 
 export const dynamic = 'force-dynamic';
 
@@ -211,7 +210,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
   const submittedFellows: LiveFellowData[] = submittedTokens
     .map((t): LiveFellowResult => {
       const rawSelfReports = subsByFellow.get(t.fellowRecordId) || [];
-      const utilization = buildReconciledUtilization(
+      const utilization = buildLiveDashboardFellow(
         rawSelfReports,
         allProjects,
         t.fellowRecordId,
@@ -225,6 +224,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         totalHoursPerWeek: totalHpw,
         hoursUtilizationPct: utilPct,
         loadTag: tag,
+        remarks,
       } = utilization;
       const hasConflict = conflictFellowIds.has(t.fellowRecordId);
 
@@ -237,8 +237,6 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         awaitingSignoff: awaitingSignoffProjects.has(s.projectRecordId),
         projectRecordId: s.projectRecordId,
       }));
-
-      const remarks = findSubmissionRemarks(rawSelfReports);
 
       return {
         fellowRecordId: t.fellowRecordId,
