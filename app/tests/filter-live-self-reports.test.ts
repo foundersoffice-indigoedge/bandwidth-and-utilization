@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { filterLiveSelfReports } from '../src/lib/airtable/projects';
+import {
+  filterLiveSelfReports,
+  reconcileLiveSelfReports,
+} from '../src/lib/airtable/projects';
 import type { ProjectAssignment } from '../src/types';
 
 function project(o: Partial<ProjectAssignment>): ProjectAssignment {
@@ -66,5 +69,45 @@ describe('filterLiveSelfReports', () => {
     ];
     const out = filterLiveSelfReports(batch, active, 'recMe', 'VP');
     expect(out.map(s => s.projectRecordId)).toEqual(['recOnAsVp', 'pending_x', 'recOnAsAssoc']);
+  });
+});
+
+describe('reconcileLiveSelfReports', () => {
+  it('returns an exclusion count when every submitted project is inactive or removed', () => {
+    const result = reconcileLiveSelfReports(
+      [sub('recInactive')],
+      active,
+      'recMe',
+      'Associate 1',
+    );
+
+    expect(result.submissions).toEqual([]);
+    expect(result.excludedProjectCount).toBe(1);
+  });
+
+  it('counts only excluded projects in a mixed batch', () => {
+    const result = reconcileLiveSelfReports(
+      [sub('recOnAsAssoc'), sub('recInactive'), sub('pending_x')],
+      active,
+      'recMe',
+      'Associate 1',
+    );
+
+    expect(result.submissions.map(s => s.projectRecordId)).toEqual([
+      'recOnAsAssoc',
+      'pending_x',
+    ]);
+    expect(result.excludedProjectCount).toBe(1);
+  });
+
+  it('does not count a pending project as excluded', () => {
+    const result = reconcileLiveSelfReports(
+      [sub('pending_x')],
+      active,
+      'recMe',
+      'Associate 1',
+    );
+
+    expect(result.excludedProjectCount).toBe(0);
   });
 });

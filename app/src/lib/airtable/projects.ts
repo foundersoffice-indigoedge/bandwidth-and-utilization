@@ -128,16 +128,40 @@ export function getProjectsForFellow(
  * `activeProjects` must be the active-stage set from `fetchAllProjects()` (already
  * stage-filtered), so a project absent from it is treated as deleted/inactive.
  */
+export interface LiveReconciliation<T> {
+  submissions: T[];
+  excludedProjectCount: number;
+}
+
+export function reconcileLiveSelfReports<T extends { projectRecordId: string }>(
+  selfReports: T[],
+  activeProjects: ProjectAssignment[],
+  fellowRecordId: string,
+  fellowDesignation: string
+): LiveReconciliation<T> {
+  const onIds = new Set(
+    getProjectsForFellow(activeProjects, fellowRecordId, fellowDesignation).map(p => p.projectRecordId)
+  );
+  const submissions = selfReports.filter(
+    s => s.projectRecordId.startsWith('pending_') || onIds.has(s.projectRecordId)
+  );
+
+  return {
+    submissions,
+    excludedProjectCount: selfReports.length - submissions.length,
+  };
+}
+
 export function filterLiveSelfReports<T extends { projectRecordId: string }>(
   selfReports: T[],
   activeProjects: ProjectAssignment[],
   fellowRecordId: string,
   fellowDesignation: string
 ): T[] {
-  const onIds = new Set(
-    getProjectsForFellow(activeProjects, fellowRecordId, fellowDesignation).map(p => p.projectRecordId)
-  );
-  return selfReports.filter(
-    s => s.projectRecordId.startsWith('pending_') || onIds.has(s.projectRecordId)
-  );
+  return reconcileLiveSelfReports(
+    selfReports,
+    activeProjects,
+    fellowRecordId,
+    fellowDesignation
+  ).submissions;
 }
