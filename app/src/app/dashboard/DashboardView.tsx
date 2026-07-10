@@ -8,6 +8,7 @@ import { getCycleEndDate } from '@/lib/schedule';
 import { getLoadTag, WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { IY_MONTHS, TYPE_LABELS as TEMPLATE_TYPE_LABELS } from '@/lib/templates';
+import { formatExcludedProjectsNotice } from '@/lib/dashboard-reconciliation';
 import { FellowProjectTab } from './FellowProjectTab';
 
 // Month labels and type-label words are re-inlined from the rules store as workflow config.
@@ -477,6 +478,11 @@ function DrillDown({
                   rows.push(
                     <tr key={`${idx}-w${wIdx}-breakdown`}>
                       <td colSpan={6} className="border p-3 bg-white">
+                        {weekSnap.excludedProjectCount > 0 && (
+                          <div className="mb-3 border-l-4 border-amber-400 bg-amber-50 rounded-r-md p-3 text-sm text-gray-800">
+                            {formatExcludedProjectsNotice(weekSnap.excludedProjectCount)}
+                          </div>
+                        )}
                         <ProjectBreakdownTable breakdown={weekSnap.projectBreakdown} />
                       </td>
                     </tr>
@@ -640,6 +646,14 @@ function LiveCycleSection({
                           conflict
                         </span>
                       )}
+                      {f.excludedProjectCount > 0 && (
+                        <span
+                          className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded"
+                          title={formatExcludedProjectsNotice(f.excludedProjectCount)}
+                        >
+                          adjusted
+                        </span>
+                      )}
                     </td>
                     <td className="border p-2 text-gray-600 text-xs">{f.designation}</td>
                     <td className="border p-2 text-center">{f.totalHoursPerWeek.toFixed(1)} / {WEEKLY_CAPACITY_HOURS}</td>
@@ -718,6 +732,11 @@ function LiveDrillDown({
         )}
       </p>
 
+      {fellow.excludedProjectCount > 0 && (
+        <div className="mb-4 border-l-4 border-amber-400 bg-amber-50 rounded-r-md p-3 text-sm text-gray-800">
+          {formatExcludedProjectsNotice(fellow.excludedProjectCount)}
+        </div>
+      )}
       <ProjectBreakdownTable breakdown={fellow.projectBreakdown} />
 
       {fellow.remarks && (
