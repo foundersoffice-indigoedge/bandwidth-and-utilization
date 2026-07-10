@@ -4,3 +4,14 @@ export function formatExcludedProjectsNotice(count: number): string {
   }
   return `${count} submitted projects were excluded because their Airtable stage or team assignment changed after submission.`;
 }
+
+export function findSubmissionRemarks(
+  submissions: Array<{ remarks: string | null }>,
+): string | null {
+  for (const submission of submissions) {
+    const trimmed = submission.remarks?.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return null;
+}

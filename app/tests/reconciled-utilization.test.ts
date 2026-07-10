@@ -58,4 +58,39 @@ describe('buildReconciledUtilization', () => {
     expect(result?.loadTag).toBe('Comfortable');
     expect(result?.excludedProjectCount).toBe(1);
   });
+
+  it('falls back to canonical weekly hours when hoursPerWeek is null', () => {
+    const result = buildReconciledUtilization(
+      [{
+        projectRecordId: 'recActive',
+        projectName: 'Active Mandate',
+        projectType: 'mandate' as const,
+        hoursPerDay: 4,
+        hoursPerWeek: null,
+      }],
+      activeProjects,
+      'recMe',
+      'Associate 1',
+    );
+
+    expect(result).toMatchObject({
+      totalHoursPerWeek: 24,
+      loadTag: 'Free',
+    });
+    expect(result?.hoursUtilizationPct).toBeCloseTo(24 / 84, 4);
+  });
+
+  it('keeps a pending project that is absent from active Airtable projects', () => {
+    const pendingSubmission = sub('pending_new_pitch', 18);
+    const result = buildReconciledUtilization(
+      [pendingSubmission],
+      activeProjects,
+      'recMe',
+      'Associate 1',
+    );
+
+    expect(result?.totalHoursPerWeek).toBe(18);
+    expect(result?.submissions).toEqual([pendingSubmission]);
+    expect(result?.excludedProjectCount).toBe(0);
+  });
 });

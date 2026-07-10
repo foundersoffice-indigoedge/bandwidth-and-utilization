@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
-import { and, eq, gte, lte, desc, or } from 'drizzle-orm';
+import { and, eq, gte, lte, desc } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
 import { INVESTMENT_YEAR_START_MONTH } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
@@ -8,6 +8,7 @@ import type { ProjectBreakdownItem, ProjectType } from '@/types';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { fetchDirectors } from '@/lib/airtable/fellows';
 import { buildReconciledUtilization } from '@/lib/reconciled-utilization';
+import { findSubmissionRemarks } from '@/lib/dashboard-reconciliation';
 
 export const dynamic = 'force-dynamic';
 
@@ -237,7 +238,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         projectRecordId: s.projectRecordId,
       }));
 
-      const remarks = fellowSubs.find(s => s.remarks && s.remarks.trim().length > 0)?.remarks?.trim() ?? null;
+      const remarks = findSubmissionRemarks(rawSelfReports);
 
       return {
         fellowRecordId: t.fellowRecordId,

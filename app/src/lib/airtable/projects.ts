@@ -112,6 +112,12 @@ export function getProjectsForFellow(
   );
 }
 
+/** The submissions retained by live reconciliation and the number excluded. */
+export interface LiveReconciliation<T> {
+  submissions: T[];
+  excludedProjectCount: number;
+}
+
 /**
  * Reconcile a fellow's self-reports for the CURRENT cycle's live views (peer email, live
  * dashboard, and the snapshot frozen at finalization). A self-report is kept only when:
@@ -128,11 +134,6 @@ export function getProjectsForFellow(
  * `activeProjects` must be the active-stage set from `fetchAllProjects()` (already
  * stage-filtered), so a project absent from it is treated as deleted/inactive.
  */
-export interface LiveReconciliation<T> {
-  submissions: T[];
-  excludedProjectCount: number;
-}
-
 export function reconcileLiveSelfReports<T extends { projectRecordId: string }>(
   selfReports: T[],
   activeProjects: ProjectAssignment[],
