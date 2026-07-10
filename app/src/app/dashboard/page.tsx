@@ -2,11 +2,12 @@ import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { and, eq, gte, lte, desc, or } from 'drizzle-orm';
 import { DashboardView } from './DashboardView';
-import { calculateHoursUtilization, getLoadTag, INVESTMENT_YEAR_START_MONTH } from '@/lib/utilization';
+import { INVESTMENT_YEAR_START_MONTH } from '@/lib/utilization';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import type { ProjectBreakdownItem, ProjectType } from '@/types';
-import { fetchAllProjects, filterLiveSelfReports } from '@/lib/airtable/projects';
+import { fetchAllProjects } from '@/lib/airtable/projects';
 import { fetchDirectors } from '@/lib/airtable/fellows';
+import { buildReconciledUtilization } from '@/lib/reconciled-utilization';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export interface SnapshotData {
   totalHoursPerWeek: number | null;
   hoursUtilizationPct: number | null;
   hoursLoadTag: string | null;
+  excludedProjectCount: number;
 }
 
 export interface LiveFellowData {
@@ -40,6 +42,7 @@ export interface LiveFellowData {
   projectBreakdown: ProjectBreakdownItem[];
   hasConflict: boolean;
   remarks: string | null;
+  excludedProjectCount: number;
 }
 
 type LiveFellowResult = LiveFellowData | null;
@@ -130,6 +133,7 @@ async function getLatestFinalizedCycleData(): Promise<LiveCycleData | null> {
     projectBreakdown: s.projectBreakdown,
     hasConflict: false,
     remarks: remarksByFellow.get(s.fellowRecordId) ?? null,
+    excludedProjectCount: s.excludedProjectCount,
   }));
 
   const signoffPanelRows = buildSignoffPanelRows(allProjects, cycleSignoffs, directors);
@@ -205,20 +209,22 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
 
   const submittedFellows: LiveFellowData[] = submittedTokens
     .map((t): LiveFellowResult => {
-      // Live-cycle reconciliation: drop self-reports whose project is deleted, now at an
-      // inactive stage, or that this fellow was reassigned off of (pending kept). Keeps the
-      // live utilization total honest. History (snapshots) is untouched.
-      const fellowSubs = filterLiveSelfReports(
-        subsByFellow.get(t.fellowRecordId) || [],
+      const rawSelfReports = subsByFellow.get(t.fellowRecordId) || [];
+      const utilization = buildReconciledUtilization(
+        rawSelfReports,
         allProjects,
         t.fellowRecordId,
         t.fellowDesignation,
       );
-      if (fellowSubs.length === 0) return null;
+      if (!utilization) return null;
 
-      const totalHpw = fellowSubs.reduce((sum, s) => sum + (s.hoursPerWeek ?? s.hoursPerDay * WORKING_DAYS_PER_WEEK), 0);
-      const utilPct = calculateHoursUtilization(totalHpw);
-      const tag = getLoadTag(utilPct) as string;
+      const {
+        submissions: fellowSubs,
+        excludedProjectCount,
+        totalHoursPerWeek: totalHpw,
+        hoursUtilizationPct: utilPct,
+        loadTag: tag,
+      } = utilization;
       const hasConflict = conflictFellowIds.has(t.fellowRecordId);
 
       const breakdown: ProjectBreakdownItem[] = fellowSubs.map(s => ({
@@ -243,6 +249,7 @@ async function getLiveCycleData(): Promise<LiveCycleData | null> {
         projectBreakdown: breakdown,
         hasConflict,
         remarks,
+        excludedProjectCount,
       };
     })
     .filter((f): f is LiveFellowData => f !== null);
@@ -295,6 +302,7 @@ export default async function DashboardPage({
     totalHoursPerWeek: s.totalHoursPerWeek,
     hoursUtilizationPct: s.hoursUtilizationPct,
     hoursLoadTag: s.hoursLoadTag,
+    excludedProjectCount: s.excludedProjectCount,
   }));
 
   // Blend active cycle into Monthly view: synthesize a pseudo-snapshot per submitted fellow.
@@ -317,6 +325,7 @@ export default async function DashboardPage({
         totalHoursPerWeek: f.totalHoursPerWeek,
         hoursUtilizationPct: f.hoursUtilizationPct,
         hoursLoadTag: f.loadTag,
+        excludedProjectCount: f.excludedProjectCount,
       });
     }
   }
