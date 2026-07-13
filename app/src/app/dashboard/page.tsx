@@ -8,6 +8,7 @@ import type { ProjectBreakdownItem, ProjectType } from '@/types';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { fetchDirectors } from '@/lib/airtable/fellows';
 import { buildLiveDashboardFellow } from '@/lib/live-dashboard-fellow';
+import { getAvailableInvestmentYears } from '@/lib/dashboard-investment-years';
 
 export const dynamic = 'force-dynamic';
 
@@ -276,11 +277,14 @@ export default async function DashboardPage({
   const iy = iyParam ? parseInt(iyParam) : defaultIy;
   const { start, end } = getIyRange(iy);
 
-  const [allSnapshots, activeLiveCycle] = await Promise.all([
+  const [allSnapshots, snapshotDates, activeLiveCycle] = await Promise.all([
     db
       .select()
       .from(snapshots)
       .where(and(gte(snapshots.snapshotDate, start), lte(snapshots.snapshotDate, end))),
+    db
+      .selectDistinct({ snapshotDate: snapshots.snapshotDate })
+      .from(snapshots),
     getLiveCycleData(),
   ]);
 
@@ -329,13 +333,10 @@ export default async function DashboardPage({
     }
   }
 
-  // Compute available IYs for the selector
-  const availableIys = new Set<number>();
-  for (const snap of allSnapshots) {
-    const d = new Date(snap.snapshotDate);
-    availableIys.add(d.getMonth() >= INVESTMENT_YEAR_START_MONTH ? d.getFullYear() + 1 : d.getFullYear());
-  }
-  availableIys.add(defaultIy);
+  const availableIys = getAvailableInvestmentYears(
+    snapshotDates.map(row => row.snapshotDate),
+    defaultIy,
+  );
 
   return (
     <main className="max-w-7xl mx-auto p-6">
@@ -348,13 +349,11 @@ export default async function DashboardPage({
             defaultValue={iy}
             className="border rounded px-2 py-1 text-sm"
           >
-            {Array.from(availableIys)
-              .sort()
-              .map(y => (
-                <option key={y} value={y}>
-                  IY{y} ({y - 1}-{y})
-                </option>
-              ))}
+            {availableIys.map(y => (
+              <option key={y} value={y}>
+                IY{y} ({y - 1}-{y})
+              </option>
+            ))}
           </select>
           <button type="submit" className="text-xs text-blue-600 hover:underline">Go</button>
         </form>
