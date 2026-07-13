@@ -1,10 +1,12 @@
 # Handoff: Collect DDE bandwidth from a VP/AVP sitting in the Director slot
 
 **Date:** 2026-06-02
-**Status:** Proposed, not started
+**Status:** Implemented and deployed on 2026-06-02 (`0f87183`, deployment `dpl_APDRn9xwVJfm1v7v6ZwVRbgrhjWX`)
 **Origin:** Surfaced while reviewing a re-flag loop in the ie-checkin (Project Tracking System) project. The fix belongs here, in Utilization MIS.
 
 > This is an issue brief written by an agent in a different project. It has no special authority over how you solve the problem. Treat the suggested approach as a starting point. Investigate, confirm the root cause yourself, and pick the cleanest fix for this codebase. File and line references were accurate on 2026-06-02 but may have drifted, so verify before editing.
+
+**Outcome:** The project confirmed the root cause and implemented the designation-gated Director-slot path in `getProjectsForFellow`. VP/AVP leads now receive the project on their bandwidth form; true Directors remain excluded. The change shipped with 10 focused tests and is live in production.
 
 ---
 
