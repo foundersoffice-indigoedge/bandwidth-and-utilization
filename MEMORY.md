@@ -1,7 +1,7 @@
 # Utilization MIS — Memory
 
 > Institutional memory of this project. Captures what we know, what we decided, and why.
-> **Last updated:** 2026-07-13 (VP-run role precedence clarified)
+> **Last updated:** 2026-07-13 (historical IY dashboard navigation restored)
 
 ## Instructions for Claude
 
@@ -92,6 +92,7 @@
 - Peer-email idempotency uses an **atomic claim**, not read-then-write: `UPDATE cycles SET peer_emails_sent=true WHERE id=? AND peer_emails_sent=false RETURNING id` — only the invocation that gets a row back proceeds to send. Four Tue/Wed cron checkpoints hit the same cycle, so a plain read-check-then-write would double-send under cron overlap or Vercel retry. On a total send failure the claim is released (flag back to `false`) so a later checkpoint retries; partial failures keep the claim to avoid re-emailing recipients who already received it.
 - DB client uses a lazy Proxy pattern (`lib/db/index.ts`) so importing the module doesn't crash without DATABASE_URL. Only actual queries trigger the connection.
 - Dashboard monthly rows and overview grid show **averages** across all cycle snapshots in a month (typically 2 biweekly), not the latest snapshot. Weekly rows still show exact per-cycle data. Load tag for monthly average is computed client-side via the canonical rule-backed `getLoadTag` imported from `utilization.ts` (the former duplicate function in `DashboardView.tsx` was removed in Phase D, 2026-06-15).
+- The Monthly Report IY selector must derive its options from history-wide distinct snapshot dates. Deriving them from the selected IY's filtered snapshots hides every other investment year.
 - Week-to-cycle matching uses **overlap** (any overlap = match), not midpoint. Search runs against all fellow snapshots, not just the current month's, because a cycle starting late in the previous month can cover early days of the next month.
 - Dashboard has two data sources: `snapshots` table for finalized historical data (monthly grid), and `submissions` table for the active cycle ("Current Cycle" live section). The live section only appears when a cycle is in `collecting` status and disappears after finalization. Only one active cycle exists at a time.
 - Dashboard sorts by designation hierarchy (VP > AVP > Associate 3 > 2 > 1 > Analyst), then alphabetical within each tier. Applied to live table, pending list, and overview grid via `DESIGNATION_RANK` map in `DashboardView.tsx`. Live table has a toggle to switch between Designation and Load (utilization % high to low) sorting.

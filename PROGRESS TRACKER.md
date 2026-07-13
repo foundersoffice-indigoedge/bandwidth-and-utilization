@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-07-13 (VP-run VP/AVP2 bandwidth collection fixed)
+> **Last updated:** 2026-07-13 (historical IY dashboard navigation restored)
 
 ## Instructions for Claude
 
@@ -126,6 +126,7 @@ Three commits on the branch:
 | 2026-07-06 | **`REMARKS_CUTOVER` pulled forward from `2026-07-07` to `2026-07-05` to sweep in the existing backlog** (Murali Dhananjey's and Vishnu Ramesh's remarks from the 2026-07-05 cycle, already sitting unread in Slack). Redeployed MIS to pick up the env change, then manually triggered ie-checkin's `process-remarks` (`?action=process-remarks`). Result: **3 confirm-DMs sent, 2 remark rows processed, 0 ambiguous, 3 reviewed-no-action** — first real (non-empty) run of the feature. Feature now runs live going forward (no longer waiting on the 2026-07-13 cycle). |
 | 2026-07-10 | Shipped reconciled-fellow visibility fix. Added metadata-returning reconciliation, durable `snapshots.excluded_project_count`, zero-load snapshots for submitted fellows whose projects are later excluded, an adjusted badge and drill-down explanation, and raw-remark preservation. Migration `0009` applied directly to production Neon. Merged to `main`, pushed to IE Central, and deployed Ready as `dpl_BNr4UoaF5SfQqJ5whXktTpY8qWGq`. Live verification confirmed Kabir Thakwani appears at 0 hrs/week, 0%, `Free`, with 1 excluded project. 271 tests passed, TypeScript and production build passed. |
 | 2026-07-13 | Fixed VP-run bandwidth collection regression reported through the Vishnu/Aviral case. Shared role resolution now includes VP/AVP2 among VP/AVP1's projection targets on VP-run mandates; server authorization and conflict emails follow the same rule. Added regression coverage. 274 tests passed; TypeScript, touched-file lint, and production build passed. |
+| 2026-07-13 | Fixed historical IY navigation in the Monthly Report dashboard. The selector now uses a lightweight history-wide snapshot-date query while detailed report data remains scoped to the selected IY. IY26 and IY27 verified live. Committed as `0999e9a` and deployed Ready as `dpl_DUSLgPCz4FHLk5ND7V9xUaC1dY4U`. 276 tests passed. |
 
 ---
 
