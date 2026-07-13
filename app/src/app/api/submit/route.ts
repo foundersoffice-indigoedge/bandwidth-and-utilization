@@ -10,7 +10,13 @@ import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 import { fetchAllProjects } from '@/lib/airtable/projects';
 import { checkAndFinalizeCycle } from '@/lib/cycle';
 import { createSignoffIfReady } from '@/lib/signoff';
-import { computeAllowedTargets, isAllowedSubmissionEntry, determineSeniorId } from '@/lib/project-role';
+import {
+  computeAllowedTargets,
+  determineSeniorId,
+  getPerformedRoleLabel,
+  isAllowedSubmissionEntry,
+  resolveProjectRole,
+} from '@/lib/project-role';
 
 interface EntryPayload {
   projectRecordId: string;
@@ -200,7 +206,13 @@ export async function POST(req: NextRequest) {
 
         const assocFellow = fellowMap.get(sub.targetFellowId);
         if (assocFellow) {
-          const assocRoleLabel = isVpOrAvp(assocFellow.designation) ? 'Performing Associate role' : undefined;
+          const project = projectMap.get(sub.projectRecordId!);
+          const targetRole = project
+            ? resolveProjectRole(project, sub.targetFellowId, isEligibleVpAvp).role
+            : null;
+          const assocRoleLabel = targetRole
+            ? getPerformedRoleLabel(targetRole, isVpOrAvp(assocFellow.designation)) ?? undefined
+            : undefined;
           const emailId = await sendConflictEmail(
             tokenRecord.fellowName,
             tokenRecord.fellowEmail,
@@ -262,7 +274,13 @@ export async function POST(req: NextRequest) {
               resolutionToken: resToken,
             });
 
-            const selfRoleLabel = isVpOrAvp(tokenRecord.fellowDesignation) ? 'Performing Associate role' : undefined;
+            const project = projectMap.get(sub.projectRecordId!);
+            const selfRole = project
+              ? resolveProjectRole(project, tokenRecord.fellowRecordId, isEligibleVpAvp).role
+              : null;
+            const selfRoleLabel = selfRole
+              ? getPerformedRoleLabel(selfRole, isVpOrAvp(tokenRecord.fellowDesignation)) ?? undefined
+              : undefined;
             const emailId = await sendConflictEmail(
               vpFellow.name,
               vpFellow.email,

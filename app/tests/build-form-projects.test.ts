@@ -49,4 +49,20 @@ describe('buildFormProjects', () => {
     expect(fp.isVpRun).toBe(true);
     expect(fp.leadFellowName).toBe('Tanya');
   });
+
+  it('shows VP/AVP2 as a bandwidth input to VP/AVP1 on a VP-run mandate', () => {
+    const p = project({
+      projectRecordId: 'vp-run-two-seniors',
+      isVpRun: true,
+      vpAvpIds: ['recTanya', 'recAdit'],
+      associateIds: ['recAssoc'],
+      leadFellowRecordId: 'recTanya',
+      leadFellowName: 'Tanya',
+    });
+    const [fp] = buildFormProjects([p], 'recTanya', 'AVP', fellows);
+    expect(fp.associates).toEqual([
+      { recordId: 'recAdit', name: 'Adit' },
+      { recordId: 'recAssoc', name: 'Assoc' },
+    ]);
+  });
 });

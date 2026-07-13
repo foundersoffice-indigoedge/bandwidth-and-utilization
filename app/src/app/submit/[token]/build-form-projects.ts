@@ -1,6 +1,6 @@
 import type { ProjectAssignment, Fellow, ProjectType } from '@/types';
 import { isVpOrAvp } from '@/lib/airtable/fellows';
-import { resolveProjectRole, type MandateRole } from '@/lib/project-role';
+import { getPerformedRoleLabel, resolveProjectRole, type MandateRole } from '@/lib/project-role';
 
 export interface FormProject {
   projectRecordId: string;
@@ -12,12 +12,6 @@ export interface FormProject {
   leadFellowName?: string;
   performedRole: MandateRole;
   performedRoleLabel: string | null;
-}
-
-/** Show a pill only when the mandate role differs from the person's own designation tier. */
-function pillFor(role: MandateRole, designation: string): string | null {
-  const actingAssociate = role === 'associate' && isVpOrAvp(designation);
-  return actingAssociate ? 'Performing Associate role' : null;
 }
 
 export function buildFormProjects(
@@ -51,7 +45,7 @@ export function buildFormProjects(
       isVpRun: project.isVpRun,
       leadFellowName: project.leadFellowName,
       performedRole: role,
-      performedRoleLabel: pillFor(role, fellowDesignation),
+      performedRoleLabel: getPerformedRoleLabel(role, isVpOrAvp(fellowDesignation)),
     };
   });
 }

@@ -5,6 +5,7 @@ import {
   computeAllowedTargets,
   isAllowedSubmissionEntry,
   isPendingProjectSenior,
+  getPerformedRoleLabel,
 } from '../src/lib/project-role';
 import type { ProjectAssignment } from '../src/types';
 
@@ -44,6 +45,16 @@ describe('resolveProjectRole', () => {
     const p = project({ vpAvpIds: ['recSenior', 'recSecond'], associateIds: ['recA1'] });
     expect(resolveProjectRole(p, 'recSecond', eligible(['recSenior', 'recSecond']))).toEqual({
       role: 'second_senior', isSenior: false, targetFellowIds: [],
+    });
+  });
+  it('VP-run lead projects for VP/AVP2 as acting director, plus associate-slot occupants', () => {
+    const p = project({
+      isVpRun: true,
+      vpAvpIds: ['recVishnu', 'recAviral'],
+      associateIds: ['recA1'],
+    });
+    expect(resolveProjectRole(p, 'recVishnu', eligible(['recVishnu', 'recAviral']))).toEqual({
+      role: 'senior', isSenior: true, targetFellowIds: ['recAviral', 'recA1'],
     });
   });
   it('AVP in an associate slot is an associate here (self only), covered by the senior', () => {
@@ -99,5 +110,13 @@ describe('isPendingProjectSenior', () => {
     expect(isPendingProjectSenior('VP')).toBe(true);
     expect(isPendingProjectSenior('AVP')).toBe(true);
     expect(isPendingProjectSenior('Associate 2')).toBe(false);
+  });
+});
+
+describe('getPerformedRoleLabel', () => {
+  it('labels an eligible VP/AVP only when placed in an associate role', () => {
+    expect(getPerformedRoleLabel('associate', true)).toBe('Performing Associate role');
+    expect(getPerformedRoleLabel('second_senior', true)).toBeNull();
+    expect(getPerformedRoleLabel('associate', false)).toBeNull();
   });
 });

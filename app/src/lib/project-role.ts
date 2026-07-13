@@ -10,6 +10,13 @@ export interface ResolvedProjectRole {
   targetFellowIds: string[];
 }
 
+export function getPerformedRoleLabel(
+  role: MandateRole,
+  isEligibleVpAvp: boolean,
+): string | null {
+  return role === 'associate' && isEligibleVpAvp ? 'Performing Associate role' : null;
+}
+
 export type IsEligibleVpAvp = (recordId: string) => boolean;
 
 /** First eligible VP/AVP in slot order, then an eligible VP/AVP leading from the director slot, else null. */
@@ -30,7 +37,14 @@ export function resolveProjectRole(
 ): ResolvedProjectRole {
   const seniorId = determineSeniorId(project.vpAvpIds, project.directorIds, isEligible);
   if (seniorId && fellowRecordId === seniorId) {
-    return { role: 'senior', isSenior: true, targetFellowIds: project.associateIds };
+    const vpRunTeamIds = project.isVpRun
+      ? project.vpAvpIds.filter(id => id !== seniorId && isEligible(id))
+      : [];
+    return {
+      role: 'senior',
+      isSenior: true,
+      targetFellowIds: [...new Set([...vpRunTeamIds, ...project.associateIds])],
+    };
   }
   if (project.vpAvpIds.includes(fellowRecordId) || project.directorIds.includes(fellowRecordId)) {
     return { role: 'second_senior', isSenior: false, targetFellowIds: [] };

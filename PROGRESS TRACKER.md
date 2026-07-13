@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-07-10 (reconciled-fellow visibility shipped and deployed)
+> **Last updated:** 2026-07-13 (VP-run VP/AVP2 bandwidth collection fixed)
 
 ## Instructions for Claude
 
@@ -125,6 +125,7 @@ Three commits on the branch:
 | 2026-07-06 | **Fixed the peer-email "Performing Associate role" mislabel and hardened current-cycle utilization against orphaned submissions.** Ajder spotted VPs (Mitul, Murali) wrongly tagged. Root cause: `resolveProjectRole` returns `'associate'` as a catch-all (anyone not in a senior slot), and the label logic treated that as proof — so any VP whose project was missing from the fetch (deleted: Foxtale-mandate; completed-stage: Cent.ai DDE; mid-cycle pending: Mitul's PlatinumRx) or who'd been reassigned off the team mid-cycle (Murali on PlatinumRx Pitch, Airtable-edited ~5h after the cycle fired) got the pill. Each case verified against live Airtable via MCP. Two-layer fix: (1) label only when the fellow is affirmatively in `proj.associateIds` (`87ec09b`); (2) `filterLiveSelfReports` drops orphaned self-reports (row AND hours) from all three current-cycle assembly points — peer email, live dashboard, and the `finalizeCycle` snapshot — reusing `getProjectsForFellow`; scoped to the LIVE cycle only, historical snapshots + the drill-down untouched (`057dee2`). 256 tests green; both deployed. Decided not to re-send this cycle's peer email (hours/people were right, only the pill was wrong). Also surfaced but NOT a code bug: Mitul's duplicate pending "PlatinumRx" exists because the real project was assigned to him ~5h after the cycle fired, so it wasn't on his form — flagged for data reconciliation. |
 | 2026-07-06 | **`REMARKS_CUTOVER` pulled forward from `2026-07-07` to `2026-07-05` to sweep in the existing backlog** (Murali Dhananjey's and Vishnu Ramesh's remarks from the 2026-07-05 cycle, already sitting unread in Slack). Redeployed MIS to pick up the env change, then manually triggered ie-checkin's `process-remarks` (`?action=process-remarks`). Result: **3 confirm-DMs sent, 2 remark rows processed, 0 ambiguous, 3 reviewed-no-action** — first real (non-empty) run of the feature. Feature now runs live going forward (no longer waiting on the 2026-07-13 cycle). |
 | 2026-07-10 | Shipped reconciled-fellow visibility fix. Added metadata-returning reconciliation, durable `snapshots.excluded_project_count`, zero-load snapshots for submitted fellows whose projects are later excluded, an adjusted badge and drill-down explanation, and raw-remark preservation. Migration `0009` applied directly to production Neon. Merged to `main`, pushed to IE Central, and deployed Ready as `dpl_BNr4UoaF5SfQqJ5whXktTpY8qWGq`. Live verification confirmed Kabir Thakwani appears at 0 hrs/week, 0%, `Free`, with 1 excluded project. 271 tests passed, TypeScript and production build passed. |
+| 2026-07-13 | Fixed VP-run bandwidth collection regression reported through the Vishnu/Aviral case. Shared role resolution now includes VP/AVP2 among VP/AVP1's projection targets on VP-run mandates; server authorization and conflict emails follow the same rule. Added regression coverage. 274 tests passed; TypeScript, touched-file lint, and production build passed. |
 
 ---
 
