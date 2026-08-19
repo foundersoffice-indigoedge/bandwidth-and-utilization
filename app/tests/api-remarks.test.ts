@@ -6,8 +6,8 @@ let processedTargetRows: Array<{ cycleId: string; fellowRecordId: string; remark
 
 vi.mock('@/lib/db', () => {
   const claimedRows = [
-    { id: 's1', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'X - DDE | Jun 2026', projectType: 'dde', projectRecordId: 'recX' },
-    { id: 's2', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'Y Pitch | Jun 2026', projectType: 'pitch', projectRecordId: 'recY' },
+    { id: 's1', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'X - DDE | Jun 2026', projectType: 'dde', projectRecordId: 'recX', submittedAt: new Date('2026-07-13T04:00:00.000Z') },
+    { id: 's2', cycleId: 'c1', fellowRecordId: 'recF', remarks: 'X to be removed', projectName: 'Y Pitch | Jun 2026', projectType: 'pitch', projectRecordId: 'recY', submittedAt: new Date('2026-07-13T04:00:00.000Z') },
   ];
 
   const db = {
@@ -56,7 +56,7 @@ vi.mock('@/lib/db', () => {
       return {
         from: () => ({
           where: () => ({
-            limit: async () => ([{ name: 'Fellow F' }]),
+            limit: async () => ([{ name: 'Fellow F', submittedAt: new Date('2026-07-13T04:00:00.000Z') }]),
           }),
         }),
       };
@@ -102,6 +102,7 @@ describe('GET /api/admin/remarks', () => {
     expect(body.rows).toHaveLength(1);
     expect(body.rows[0].submissionId).toBe('s1');
     expect(body.rows[0].siblingSubmissionIds).toEqual(['s2']);
+    expect(body.rows[0].submittedAt).toBe('2026-07-13T04:00:00.000Z');
     expect(claimUpdate).toHaveBeenCalled();
   });
 });

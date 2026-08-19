@@ -15,6 +15,7 @@ type RemarkRow = {
   fellowName: string | null;
   cycleId: string;
   cycleStartDate: string;
+  submittedAt: string | null;
   submitterProjects: { name: string; type: 'mandate' | 'dde' | 'pitch'; recordId: string }[];
 };
 
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
   for (const g of groups.values()) {
     const rep = g[0];
     const [tok] = await db
-      .select({ name: tokens.fellowName })
+      .select({ name: tokens.fellowName, submittedAt: tokens.submittedAt })
       .from(tokens)
       .where(and(eq(tokens.cycleId, rep.cycleId), eq(tokens.fellowRecordId, rep.fellowRecordId)))
       .limit(1);
@@ -98,6 +99,7 @@ export async function GET(req: Request) {
       fellowName: tok?.name ?? null,
       cycleId: rep.cycleId,
       cycleStartDate: String(cycleStartById.get(rep.cycleId)),
+      submittedAt: tok?.submittedAt?.toISOString() ?? null,
       submitterProjects: projRows.map((p) => ({
         name: p.name,
         type: p.type as 'mandate' | 'dde' | 'pitch',
