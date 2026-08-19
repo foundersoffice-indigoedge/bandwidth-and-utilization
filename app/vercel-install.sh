@@ -11,10 +11,10 @@ set -euo pipefail
 
 if [ -n "${IE_AGENT_RULES_TOKEN:-}" ]; then
   base="https://${IE_AGENT_RULES_TOKEN}@github.com/"
-  git config --global url."$base".insteadOf "git+ssh://git@github.com/"
-  git config --global url."$base".insteadOf "ssh://git@github.com/"
-  git config --global url."$base".insteadOf "git@github.com:"
-  git config --global url."$base".insteadOf "https://github.com/"
+  git config --global --add url."$base".insteadOf "git+ssh://git@github.com/"
+  git config --global --add url."$base".insteadOf "ssh://git@github.com/"
+  git config --global --add url."$base".insteadOf "git@github.com:"
+  git config --global --add url."$base".insteadOf "https://github.com/"
 else
   echo "warning: IE_AGENT_RULES_TOKEN is not set; private deps will fail to install" >&2
 fi
