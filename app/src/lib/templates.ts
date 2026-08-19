@@ -39,6 +39,7 @@ export const EMAIL_SUBJECTS: Record<string, string> = {
   flag: 'Bandwidth Sign-off Flag — {{projectName}} — {{fellowName}}',
   'flag-confirmation': 'Re: Bandwidth Sign-off Flag — {{projectName}} — {{fellowName}}',
   completion: 'Bandwidth Cycle {{dateRange}} — Complete',
+  'submission-compliance': 'Bandwidth Submission Compliance Report: {{date}}',
 };
 
 export const RESOLVER_LABELS: Record<string, string> = {

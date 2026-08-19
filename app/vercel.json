@@ -11,6 +11,14 @@
       "schedule": "30 3 * * 2-5"
     },
     {
+      "path": "/api/cron/submission-compliance",
+      "schedule": "30 7 * * 1"
+    },
+    {
+      "path": "/api/cron/submission-compliance",
+      "schedule": "45 7 * * 1"
+    },
+    {
       "path": "/api/cron/conflict-reminders",
       "schedule": "30 4 * * *"
     },

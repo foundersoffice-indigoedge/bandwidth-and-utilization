@@ -304,7 +304,7 @@ export async function POST(req: NextRequest) {
   // Burn token
   await db
     .update(tokens)
-    .set({ status: 'submitted' as const, submittedAt: new Date() })
+    .set({ status: 'submitted' as const, submittedAt: new Date(), statusUpdatedAt: new Date() })
     .where(eq(tokens.id, tokenRecord.id));
 
   // Post remarks to Slack

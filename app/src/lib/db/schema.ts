@@ -1,11 +1,16 @@
-import { pgTable, uuid, text, date, timestamp, real, integer, boolean, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, date, timestamp, real, integer, boolean, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core';
 import type { ProjectBreakdownItem } from '@/types';
 
 export const cycles = pgTable('cycles', {
   id: uuid('id').defaultRandom().primaryKey(),
   startDate: date('start_date').notNull(),
   status: text('status', { enum: ['collecting', 'complete'] }).notNull().default('collecting'),
+  // Limited-scope `?fellows=` runs are safe email tests, never production compliance evidence.
+  isTest: boolean('is_test').notNull().default(false),
   peerEmailsSent: boolean('peer_emails_sent').notNull().default(false),
+  complianceReportClaimedAt: timestamp('compliance_report_claimed_at'),
+  complianceReportSentAt: timestamp('compliance_report_sent_at'),
+  complianceReportMessageId: text('compliance_report_message_id'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -19,7 +24,28 @@ export const tokens = pgTable('tokens', {
   token: text('token').unique().notNull(),
   status: text('status', { enum: ['pending', 'submitted', 'not_needed'] }).notNull().default('pending'),
   submittedAt: timestamp('submitted_at'),
+  // Preserves whether a manual exemption was active at the compliance deadline.
+  notNeededAt: timestamp('not_needed_at'),
+  statusUpdatedAt: timestamp('status_updated_at').defaultNow().notNull(),
 });
+
+/** Immutable outcome of a required form at the Monday 13:00 IST deadline. */
+export const submissionDeadlineChecks = pgTable('submission_deadline_checks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tokenId: uuid('token_id').references(() => tokens.id).notNull(),
+  cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),
+  cycleStartDate: date('cycle_start_date').notNull(),
+  fellowRecordId: text('fellow_record_id').notNull(),
+  fellowName: text('fellow_name').notNull(),
+  fellowDesignation: text('fellow_designation').notNull(),
+  outcome: text('outcome', { enum: ['on_time', 'missed'] }).notNull(),
+  deadlineAt: timestamp('deadline_at').notNull(),
+  submittedAt: timestamp('submitted_at'),
+  checkedAt: timestamp('checked_at').defaultNow().notNull(),
+}, table => [
+  uniqueIndex('submission_deadline_checks_token_id_unique').on(table.tokenId),
+  index('submission_deadline_checks_fellow_date_idx').on(table.fellowRecordId, table.cycleStartDate),
+]);
 
 export const submissions = pgTable('submissions', {
   id: uuid('id').defaultRandom().primaryKey(),

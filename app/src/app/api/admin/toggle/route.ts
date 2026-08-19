@@ -15,7 +15,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Token not found' }, { status: 404 });
   }
 
-  await db.update(tokens).set({ status }).where(eq(tokens.id, tokenId));
+  const now = new Date();
+  await db.update(tokens).set({
+    status,
+    statusUpdatedAt: now,
+    // Retain the last exemption instant. A delayed deadline cron can then tell
+    // whether the exemption was active at 1:00 p.m. after a later re-enable.
+    notNeededAt: status === 'not_needed' ? now : token.notNeededAt,
+  }).where(eq(tokens.id, tokenId));
 
   if (status === 'not_needed') {
     await checkAndFinalizeCycle(token.cycleId);

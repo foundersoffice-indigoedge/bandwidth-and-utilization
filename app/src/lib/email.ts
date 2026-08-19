@@ -5,6 +5,7 @@ import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { WEEKLY_CAPACITY_HOURS } from '@/lib/utilization';
 import { renderTemplate, EMAIL_SUBJECTS, TYPE_LABELS, TYPE_LABELS_PLURAL, RESOLVER_LABELS, FLAG_ACTION_LABELS } from './templates';
 import { assemblePeerBandwidthData, buildPeerBandwidthEmailHtml } from '@/lib/peer-bandwidth';
+import type { ComplianceClassification } from '@/lib/submission-compliance';
 
 // Lazily instantiated so `next build` (which evaluates route modules to collect
 // page data) doesn't require RESEND_API_KEY at build time — only at send time.
@@ -22,8 +23,14 @@ const testEmailOverride = process.env.TEST_EMAIL_OVERRIDE;
 const SUBJECTS = EMAIL_SUBJECTS;
 
 /** Send an email via Resend, throwing on failure. Returns the Resend message ID. */
-async function sendEmail(params: Parameters<Resend['emails']['send']>[0]): Promise<string | undefined> {
-  const { data, error } = await resendClient().emails.send(params);
+async function sendEmail(
+  params: Parameters<Resend['emails']['send']>[0],
+  idempotencyKey?: string,
+): Promise<string | undefined> {
+  const { data, error } = await resendClient().emails.send(
+    params,
+    idempotencyKey ? { idempotencyKey } : undefined,
+  );
   if (error) throw new Error(`Resend error: ${error.message}`);
   return data?.id;
 }
@@ -131,6 +138,102 @@ export async function sendReminderEmail(
       <a href="${process.env.APP_URL}/submit/${token}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Submit Your Bandwidth</a>
     `,
   });
+}
+
+export interface SubmissionComplianceReportPerson {
+  name: string;
+  designation: string;
+  classification: Exclude<ComplianceClassification, 'none'>;
+  totalMisses: number;
+  category1Streaks: string[][];
+  category2Episodes: string[][];
+  currentCheckpointStatus: string;
+}
+
+const COMPLIANCE_SECTION_ORDER: Array<{
+  classification: SubmissionComplianceReportPerson['classification'];
+  title: string;
+}> = [
+  { classification: 'both', title: 'Both violations' },
+  { classification: 'category_1', title: 'Category 1 only' },
+  { classification: 'category_2', title: 'Category 2 only' },
+];
+
+function formatEpisodes(episodes: string[][]): string {
+  return episodes
+    .map(episode => episode.map(date => new Date(`${date}T00:00:00.000Z`).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric',
+    })).join(', '))
+    .join(' | ');
+}
+
+export function buildSubmissionComplianceReportHtml(params: {
+  cycleStartDate: string;
+  people: SubmissionComplianceReportPerson[];
+}): string {
+  const date = new Date(`${params.cycleStartDate}T00:00:00.000Z`).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric',
+  });
+
+  const sections = COMPLIANCE_SECTION_ORDER.map(({ classification, title }) => {
+    const people = params.people.filter(person => person.classification === classification);
+    if (people.length === 0) return '';
+
+    const rows = people.map(person => `
+      <tr>
+        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top">
+          <strong>${person.name}</strong><br />
+          <span style="color:#6b7280;font-size:12px">${person.designation}</span>
+        </td>
+        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:13px">
+          <strong>${person.totalMisses}</strong> missed deadline${person.totalMisses === 1 ? '' : 's'} since cutover<br />
+          <span style="color:#6b7280">Current checkpoint: ${person.currentCheckpointStatus}</span>
+        </td>
+        <td style="padding:14px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:13px">
+          ${person.category1Streaks.length > 0 ? `<strong>Category 1 streak${person.category1Streaks.length === 1 ? '' : 's'}:</strong> ${formatEpisodes(person.category1Streaks)}<br />` : ''}
+          ${person.category2Episodes.length > 0 ? `<strong>Category 2 episode${person.category2Episodes.length === 1 ? '' : 's'}:</strong> ${formatEpisodes(person.category2Episodes)}` : ''}
+        </td>
+      </tr>`).join('');
+
+    return `
+      <h2 style="font-size:16px;margin:28px 0 10px;color:#111827">${title}</h2>
+      <table style="border-collapse:collapse;width:100%;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+        <tr style="background:#f9fafb">
+          <th style="padding:10px 12px;text-align:left;font-size:12px">Person</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px">Current position</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px">Violation detail</th>
+        </tr>
+        ${rows}
+      </table>`;
+  }).join('');
+
+  return `
+    <p>Hi Ajder,</p>
+    <p>These people reached a new bandwidth-submission compliance classification at the Monday 1:00 p.m. IST checkpoint on <strong>${date}</strong>.</p>
+    ${sections}
+    <p style="font-size:12px;color:#6b7280;margin-top:28px">This report records deadline compliance from the configured cutover date. It sends only when somebody's classification changes.</p>
+  `;
+}
+
+/** One consolidated compliance report for Ajder. This intentionally has no CC. */
+export async function sendSubmissionComplianceReport(params: {
+  cycleId: string;
+  cycleStartDate: string;
+  people: SubmissionComplianceReportPerson[];
+}): Promise<string | undefined> {
+  const adminEmail = process.env.ADMIN_EMAIL;
+  if (!adminEmail) throw new Error('ADMIN_EMAIL is required for submission-compliance reports');
+
+  const date = new Date(`${params.cycleStartDate}T00:00:00.000Z`).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric',
+  });
+
+  return sendEmail({
+    from,
+    to: overrideTo(adminEmail),
+    subject: renderTemplate(SUBJECTS['submission-compliance'], { date }),
+    html: buildSubmissionComplianceReportHtml(params),
+  }, `submission-compliance/${params.cycleId}`);
 }
 
 // --- Conflict Email ---

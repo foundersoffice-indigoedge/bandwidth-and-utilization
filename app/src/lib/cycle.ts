@@ -18,7 +18,7 @@ export async function startCycle(testFellowIds?: string[]): Promise<string> {
 
   const [cycle] = await db
     .insert(cycles)
-    .values({ startDate })
+    .values({ startDate, isTest: !!testFellowIds })
     .returning();
 
   let fellows = await fetchEligibleFellows();
