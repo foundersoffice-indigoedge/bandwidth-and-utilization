@@ -21,9 +21,9 @@ describe('shared mandate stage contract', () => {
   });
 
   it('derives exactly the active DDE stages', () => {
-    expect(new Set(TABLE_CONFIG.dde.activeStages)).toEqual(
-      new Set(['Not Started', 'DDE In Progress']),
-    );
+    const activeDDEStages = new Set(TABLE_CONFIG.dde.activeStages);
+    expect(activeDDEStages).toEqual(new Set(['Not Started', 'DDE In Progress']));
+    expect(activeDDEStages).not.toContain('DDE - Cancelled');
   });
 
   it('derives exactly the active Pitch stages', () => {
