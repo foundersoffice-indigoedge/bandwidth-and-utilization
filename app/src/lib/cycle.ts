@@ -1,9 +1,11 @@
 import { db } from '@/lib/db';
 import { cycles, tokens, submissions, conflicts, snapshots, directorSignoffs } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
+import { fetchEligibleFellows, fetchDirectors, isVpOrAvp } from '@/lib/airtable/fellows';
 import { fetchAllProjects, getProjectsForFellow } from '@/lib/airtable/projects';
 import { getExpectedDirectorIds } from '@/lib/signoff-scope';
+import { createSignoffIfReady, type SignoffLiveContext } from '@/lib/signoff';
+import { reconcilePendingSubmissionConflicts, type ConflictReconciliationResult } from '@/lib/conflict-lifecycle';
 import { sendCollectionEmail, sendCompletionEmail, type FellowSummary } from '@/lib/email';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { buildReconciledUtilization } from '@/lib/reconciled-utilization';
@@ -59,13 +61,47 @@ export async function getActiveCycle() {
   return cycle || null;
 }
 
-export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
+export interface LiveAirtableContext {
+  allProjects: Awaited<ReturnType<typeof fetchAllProjects>>;
+  fellows: Awaited<ReturnType<typeof fetchEligibleFellows>>;
+  currentDirectors: Awaited<ReturnType<typeof fetchDirectors>>;
+}
+
+function toSignoffLiveContext(context: LiveAirtableContext): SignoffLiveContext {
+  return {
+    projects: context.allProjects,
+    fellows: context.fellows,
+    directors: context.currentDirectors,
+  };
+}
+
+export async function checkAndFinalizeCycle(
+  cycleId: string,
+  preflightContext?: LiveAirtableContext,
+): Promise<void> {
   const pendingTokens = await db
     .select()
     .from(tokens)
     .where(and(eq(tokens.cycleId, cycleId), eq(tokens.status, 'pending')));
 
   if (pendingTokens.length > 0) return;
+
+  // Airtable's current active-stage projection is the prerequisite for every
+  // lifecycle write. If Airtable is unavailable this throws before a conflict,
+  // sign-off, or completion email can be changed or sent.
+  const context = preflightContext ?? await fetchLiveAirtableContext();
+  const fellowById = new Map(context.fellows.map(fellow => [fellow.recordId, fellow]));
+  const reconciliation = await reconcilePendingSubmissionConflicts(cycleId, {
+    activeProjects: context.allProjects,
+    isEligibleVpAvp: recordId => {
+      const fellow = fellowById.get(recordId);
+      return !!fellow && isVpOrAvp(fellow.designation);
+    },
+  });
+
+  if (reconciliation.resolvedConflictIds.length > 0) {
+    await rerunDirectorSignoffReadiness(cycleId, context);
+  }
 
   const pendingConflicts = await db
     .select()
@@ -77,14 +113,56 @@ export async function checkAndFinalizeCycle(cycleId: string): Promise<void> {
   // Third gate: every current Director with ≥1 staffed project this cycle must have
   // a terminal sign-off (confirmed or flagged_resolved). Shared with the peer-email
   // banner via getSignoffState so both agree on who's expected.
-  const [allProjects, currentDirectors] = await Promise.all([
-    fetchAllProjects(),
-    fetchDirectors(),
-  ]);
-  const signoffState = await getSignoffState(cycleId, allProjects, currentDirectors);
+  const signoffState = await getSignoffState(cycleId, context.allProjects, context.currentDirectors);
   if (signoffState === 'pending') return;
 
-  await finalizeCycle(cycleId);
+  await finalizeCycle(cycleId, context);
+}
+
+/** Re-evaluate sign-off creation after verified automatic conflict closures. */
+export async function rerunDirectorSignoffReadiness(
+  cycleId: string,
+  context: LiveAirtableContext,
+): Promise<void> {
+  const directorIds = new Set(context.allProjects.flatMap(project => project.directorIds));
+  const signoffContext = toSignoffLiveContext(context);
+  for (const directorId of directorIds) {
+    await createSignoffIfReady(cycleId, directorId, signoffContext);
+  }
+}
+
+export async function fetchLiveAirtableContext(): Promise<LiveAirtableContext> {
+  const [allProjects, fellows, currentDirectors] = await Promise.all([
+    fetchAllProjects(),
+    fetchEligibleFellows(),
+    fetchDirectors(),
+  ]);
+  return { allProjects, fellows, currentDirectors };
+}
+
+/**
+ * Fetches the complete live Airtable context before reconciling conflict rows.
+ * Routes use this before any reminder or readiness email so an Airtable failure
+ * stops the run without closing conflicts or sending messages.
+ */
+export async function reconcileCycleConflictsWithLiveAirtable(
+  cycleId: string,
+): Promise<ConflictReconciliationResult & LiveAirtableContext> {
+  const context = await fetchLiveAirtableContext();
+  const fellowById = new Map(context.fellows.map(fellow => [fellow.recordId, fellow]));
+  const reconciliation = await reconcilePendingSubmissionConflicts(cycleId, {
+    activeProjects: context.allProjects,
+    isEligibleVpAvp: recordId => {
+      const fellow = fellowById.get(recordId);
+      return !!fellow && isVpOrAvp(fellow.designation);
+    },
+  });
+
+  if (reconciliation.resolvedConflictIds.length > 0) {
+    await rerunDirectorSignoffReadiness(cycleId, context);
+  }
+
+  return { ...reconciliation, ...context };
 }
 
 export type SignoffState = 'not_required' | 'pending' | 'complete';
@@ -125,9 +203,29 @@ export async function finalizeStaleCycles(): Promise<string[]> {
     .from(cycles)
     .where(eq(cycles.status, 'collecting'));
 
+  // Fetch Airtable before the first lifecycle write. A failed fetch leaves every
+  // stale cycle untouched instead of falling back to a potentially obsolete VP value.
+  const [allProjects, fellows] = await Promise.all([
+    fetchAllProjects(),
+    fetchEligibleFellows(),
+  ]);
+  const fellowById = new Map(fellows.map(fellow => [fellow.recordId, fellow]));
+  const lifecycleContext = {
+    activeProjects: allProjects,
+    isEligibleVpAvp: (recordId: string) => {
+      const fellow = fellowById.get(recordId);
+      return !!fellow && isVpOrAvp(fellow.designation);
+    },
+  };
+
   const finalizedIds: string[] = [];
   for (const cycle of staleCycles) {
-    // Step 1: Auto-resolve dangling submission-source conflicts (VP-as-truth).
+    const reconciliation = await reconcilePendingSubmissionConflicts(cycle.id, lifecycleContext);
+    // Missing or malformed source evidence cannot safely select a VP number.
+    if (reconciliation.ambiguousConflictIds.length > 0) continue;
+
+    // Step 1: Auto-resolve only live submission-source conflicts (VP-as-truth).
+    // Mid-cycle pending projects stay with the setup queue and block stale closure.
     const pendingConflicts = await db
       .select()
       .from(conflicts)
@@ -135,6 +233,7 @@ export async function finalizeStaleCycles(): Promise<string[]> {
 
     for (const conflict of pendingConflicts) {
       if (conflict.source === 'director_flag') continue; // handled below
+      if (conflict.projectRecordId.startsWith('pending_')) continue;
       await db
         .update(conflicts)
         .set({
@@ -199,14 +298,22 @@ export async function finalizeStaleCycles(): Promise<string[]> {
       }
     }
 
-    await finalizeCycle(cycle.id);
+    const unresolvedPendingProjectConflict = pendingConflicts.some(
+      conflict => conflict.source === 'submission' && conflict.projectRecordId.startsWith('pending_'),
+    );
+    if (unresolvedPendingProjectConflict) continue;
+
+    await finalizeCycle(cycle.id, { allProjects, fellows });
     finalizedIds.push(cycle.id);
   }
 
   return finalizedIds;
 }
 
-async function finalizeCycle(cycleId: string): Promise<void> {
+async function finalizeCycle(
+  cycleId: string,
+  preflightContext?: Pick<LiveAirtableContext, 'allProjects' | 'fellows'>,
+): Promise<void> {
   const [cycle] = await db.select().from(cycles).where(eq(cycles.id, cycleId)).limit(1);
   if (!cycle || cycle.status === 'complete') return;
 
@@ -215,8 +322,8 @@ async function finalizeCycle(cycleId: string): Promise<void> {
     .from(submissions)
     .where(eq(submissions.cycleId, cycleId));
 
-  const fellows = await fetchEligibleFellows();
-  const allProjects = await fetchAllProjects();
+  const fellows = preflightContext?.fellows ?? await fetchEligibleFellows();
+  const allProjects = preflightContext?.allProjects ?? await fetchAllProjects();
   const projectMap = new Map(allProjects.map(p => [p.projectRecordId, p]));
 
   // Create snapshots per fellow and collect summaries for email

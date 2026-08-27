@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
             assocRoleLabel,
           );
           if (emailId) {
-            await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.resolutionToken, resToken));
+            await db.update(conflicts).set({ emailMessageId: emailId, emailSentAt: new Date() }).where(eq(conflicts.resolutionToken, resToken));
           }
         }
       }
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
               selfRoleLabel,
             );
             if (emailId) {
-              await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.resolutionToken, resToken));
+              await db.update(conflicts).set({ emailMessageId: emailId, emailSentAt: new Date() }).where(eq(conflicts.resolutionToken, resToken));
             }
           }
         }

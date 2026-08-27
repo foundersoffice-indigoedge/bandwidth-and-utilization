@@ -98,6 +98,9 @@ export const conflicts = pgTable('conflicts', {
   resolvedBy: text('resolved_by'),
   resolutionToken: text('resolution_token'),
   emailMessageId: text('email_message_id'),
+  // Successful original-email timestamp. Kept separately from reminder history so
+  // reminder eligibility can enforce a full first-day grace period.
+  emailSentAt: timestamp('email_sent_at'),
   lastReminderSentAt: timestamp('last_reminder_sent_at'),
   // Director sign-off extensions
   source: text('source', { enum: ['submission', 'director_flag'] }).notNull().default('submission'),

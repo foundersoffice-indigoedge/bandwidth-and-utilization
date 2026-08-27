@@ -4,9 +4,8 @@ import { conflicts, submissions, directorSignoffs } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { WORKING_DAYS_PER_WEEK } from '@/lib/scoring';
 import { sendConflictResolutionEmail, sendDirectorFlagResolutionConfirmationEmail } from '@/lib/email';
-import { checkAndFinalizeCycle } from '@/lib/cycle';
+import { checkAndFinalizeCycle, reconcileCycleConflictsWithLiveAirtable } from '@/lib/cycle';
 import { fetchEligibleFellows } from '@/lib/airtable/fellows';
-import { fetchAllProjects } from '@/lib/airtable/projects';
 import { transitionToFlaggedResolved, createSignoffIfReady } from '@/lib/signoff';
 import { dedupeRecipients } from '@/lib/director-flag';
 import type { ConflictResolution } from '@/types';
@@ -158,6 +157,28 @@ export async function POST(req: NextRequest) {
   // Existing path: submission-source conflict — two-sided writeback
   // ---------------------------------------------------------------------------
 
+  // Airtable must confirm that this pair is still a live senior projection before
+  // a manual choice mutates either submission. A terminal, paused, deleted, or
+  // reassigned project is resolved without rewriting the historical submissions.
+  let lifecycle: Awaited<ReturnType<typeof reconcileCycleConflictsWithLiveAirtable>>;
+  try {
+    lifecycle = await reconcileCycleConflictsWithLiveAirtable(conflict.cycleId);
+  } catch (err) {
+    console.error('Conflict resolution lifecycle preflight failed', err);
+    return NextResponse.json({ error: 'Airtable lifecycle preflight failed; conflict was not changed' }, { status: 503 });
+  }
+
+  if (lifecycle.resolvedConflictIds.includes(conflict.id)) {
+    await checkAndFinalizeCycle(conflict.cycleId, lifecycle);
+    return NextResponse.json({ ok: true, resolvedBy: 'project_inactive' });
+  }
+  if (lifecycle.ambiguousConflictIds.includes(conflict.id)) {
+    return NextResponse.json({ error: 'Conflict source evidence is incomplete; it was retained for review' }, { status: 409 });
+  }
+  if (!lifecycle.activeConflictIds.includes(conflict.id)) {
+    return NextResponse.json({ error: 'Conflict is no longer pending' }, { status: 409 });
+  }
+
   let resolvedHours: number;
   if (action === 'associate_number') {
     resolvedHours = conflict.associateHoursPerDay!;
@@ -211,8 +232,7 @@ export async function POST(req: NextRequest) {
 
   // Send resolution confirmation email (threads with original conflict email)
   try {
-    const fellows = await fetchEligibleFellows();
-    const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
+    const fellowMap = new Map(lifecycle.fellows.map(f => [f.recordId, f]));
     const vpFellow = vpSub ? fellowMap.get(vpSub.fellowRecordId) : null;
     const assocFellow = assocSub ? fellowMap.get(assocSub.fellowRecordId) : null;
 
@@ -233,16 +253,20 @@ export async function POST(req: NextRequest) {
   }
 
   // Trigger signoff check for any director whose slice may now be complete
-  const resolveProjects = await fetchAllProjects();
-  const resolveProject = resolveProjects.find(p => p.projectRecordId === conflict.projectRecordId);
+  const resolveProject = lifecycle.allProjects.find(p => p.projectRecordId === conflict.projectRecordId);
   if (resolveProject) {
+    const signoffContext = {
+      projects: lifecycle.allProjects,
+      fellows: lifecycle.fellows,
+      directors: lifecycle.currentDirectors,
+    };
     for (const directorId of resolveProject.directorIds) {
-      await createSignoffIfReady(conflict.cycleId, directorId);
+      await createSignoffIfReady(conflict.cycleId, directorId, signoffContext);
     }
   }
 
   // Check if cycle is now complete
-  await checkAndFinalizeCycle(conflict.cycleId);
+  await checkAndFinalizeCycle(conflict.cycleId, lifecycle);
 
   return NextResponse.json({ ok: true });
 }

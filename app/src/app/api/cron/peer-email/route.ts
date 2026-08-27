@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { cycles, tokens, conflicts, submissions } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { fetchEligibleFellows, fetchDirectors } from '@/lib/airtable/fellows';
-import { fetchAllProjects } from '@/lib/airtable/projects';
-import { getSignoffState } from '@/lib/cycle';
+import { fetchDirectors } from '@/lib/airtable/fellows';
+import { checkAndFinalizeCycle, getSignoffState, reconcileCycleConflictsWithLiveAirtable } from '@/lib/cycle';
 import { sendPeerBandwidthEmails } from '@/lib/email';
 import { istDayOfWeek, currentCycleStartDate, decidePeerEmail } from '@/lib/peer-email-schedule';
 
@@ -53,6 +52,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: 'Peer emails already sent for this cycle' });
   }
 
+  // Reconcile from a complete Airtable read before this route claims a send or
+  // evaluates readiness. A failed read leaves both conflicts and peer emails alone.
+  let lifecycle: Awaited<ReturnType<typeof reconcileCycleConflictsWithLiveAirtable>>;
+  try {
+    lifecycle = await reconcileCycleConflictsWithLiveAirtable(cycle.id);
+    if (lifecycle.resolvedConflictIds.length > 0) {
+      await checkAndFinalizeCycle(cycle.id, lifecycle);
+    }
+  } catch (err) {
+    console.error('Peer-email lifecycle preflight failed', err);
+    return NextResponse.json({
+      error: 'Airtable lifecycle preflight failed; peer emails were not sent',
+      autoResolved: 0,
+      ambiguousConflicts: 0,
+    }, { status: 503 });
+  }
+
   // Decide whether to send now (skipped under ?force=true).
   const istDay = istDayOfWeek(now);
   let trigger: string;
@@ -87,14 +103,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const [allSubmissions, fellows, allProjects, currentDirectors, cycleTokens, openConflicts] = await Promise.all([
+    const [allSubmissions, currentDirectors, cycleTokens, openConflicts] = await Promise.all([
       db.select().from(submissions).where(eq(submissions.cycleId, cycle.id)),
-      fetchEligibleFellows(),
-      fetchAllProjects(),
       fetchDirectors(),
       db.select().from(tokens).where(eq(tokens.cycleId, cycle.id)),
       db.select().from(conflicts).where(and(eq(conflicts.cycleId, cycle.id), eq(conflicts.status, 'pending'))),
     ]);
+    const { fellows, allProjects } = lifecycle;
 
     // Source of truth for "not yet submitted": tokens still pending (not absence of
     // submissions, which would wrongly flag no-project / not_needed fellows).
@@ -142,6 +157,8 @@ export async function GET(req: NextRequest) {
       signoffState,
       pendingCount: pendingFellowIds.size,
       conflictsPending: openConflicts.length > 0,
+      autoResolved: lifecycle.resolvedConflictIds.length,
+      ambiguousConflicts: lifecycle.ambiguousConflictIds.length,
       ...result,
     });
   } catch (err) {

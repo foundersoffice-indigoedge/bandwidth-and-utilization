@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
             teammateRoleLabel,
           );
           if (emailId) {
-            await db.update(conflicts).set({ emailMessageId: emailId }).where(eq(conflicts.id, conflictRow.id));
+            await db.update(conflicts).set({ emailMessageId: emailId, emailSentAt: new Date() }).where(eq(conflicts.id, conflictRow.id));
           }
         }
       }

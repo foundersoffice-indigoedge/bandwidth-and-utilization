@@ -75,6 +75,13 @@ export function getDirectorSliceStatus(input: SliceInput): 'complete' | 'incompl
 type SubmissionRow = typeof submissionsTable.$inferSelect;
 type FellowRow = { recordId: string; name: string; designation: string; email: string };
 
+/** A fixed Airtable read used when lifecycle reconciliation has already preflighted a write. */
+export interface SignoffLiveContext {
+  projects: ProjectAssignment[];
+  fellows: FellowRow[];
+  directors: FellowRow[];
+}
+
 /**
  * Group submissions by project for a director's slice. Exported so the signoff
  * page server component can reuse the same grouping logic without re-implementing it.
@@ -139,7 +146,8 @@ export function buildSignoffGroups(
  */
 export async function createSignoffIfReady(
   cycleId: string,
-  directorFellowId: string
+  directorFellowId: string,
+  liveContext?: SignoffLiveContext,
 ): Promise<{ created: boolean; reason?: string }> {
   // Feature-flag gate: skip cycles older than SIGNOFF_ENABLED_FROM (YYYY-MM-DD)
   const enabledFrom = process.env.SIGNOFF_ENABLED_FROM;
@@ -160,7 +168,7 @@ export async function createSignoffIfReady(
 
   // Gather data in parallel
   const [projects, allTokens, allSubmissions, allConflicts] = await Promise.all([
-    fetchAllProjects(),
+    liveContext ? Promise.resolve(liveContext.projects) : fetchAllProjects(),
     db.select().from(tokensTable).where(eq(tokensTable.cycleId, cycleId)),
     db.select().from(submissionsTable).where(eq(submissionsTable.cycleId, cycleId)),
     db.select().from(conflictsTable).where(eq(conflictsTable.cycleId, cycleId)),
@@ -193,8 +201,8 @@ export async function createSignoffIfReady(
   // field are filtered out at source. VP-led mandates and VP-led DDEs therefore produce
   // no sign-off, even if a VP recordId appears in the project's director field.
   const [directors, teamFellows, cycleRows] = await Promise.all([
-    fetchDirectors(),
-    fetchEligibleFellows(),
+    liveContext ? Promise.resolve(liveContext.directors) : fetchDirectors(),
+    liveContext ? Promise.resolve(liveContext.fellows) : fetchEligibleFellows(),
     db.select().from(cycles).where(eq(cycles.id, cycleId)).limit(1),
   ]);
 
@@ -454,7 +462,7 @@ export async function submitFlags(params: {
     if (messageId) {
       await db
         .update(conflictsTable)
-        .set({ emailMessageId: messageId })
+        .set({ emailMessageId: messageId, emailSentAt: new Date() })
         .where(eq(conflictsTable.id, insertedRow.id));
     }
   }
