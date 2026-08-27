@@ -1,7 +1,7 @@
 # Utilization MIS — Memory
 
 > Institutional memory of this project. Captures what we know, what we decided, and why.
-> **Last updated:** 2026-07-13 (historical IY dashboard navigation restored)
+> **Last updated:** 2026-08-27 (stale submission-conflict lifecycle reconciliation shipped)
 
 ## Instructions for Claude
 
@@ -76,6 +76,8 @@
 | 2026-07-06 | **Added secret-gated "remarks" endpoints so ie-checkin can drain bandwidth remarks into the project tracker.** `GET /api/admin/remarks` atomically claims + dedups un-processed self-report remarks (one row per cycle+fellow+text, siblings tracked), forward-only via `REMARKS_CUTOVER`; `POST /api/admin/remarks/:submissionId/processed` marks a remark + its siblings done (idempotent). New nullable `remarks_claimed_at` / `remarks_processed_at` columns (migration `0008`, applied to prod). Same `BT_INTEGRATION_SECRET` boundary and "BT owns lifecycle state, ie-checkin owns Airtable writes" contract as `pending_projects`. | Free-text remarks carried real FO-actionable signals (project team/status changes) that never left Slack + the dashboard. ie-checkin classifies + acts (confirm-DMs → Airtable on approval); BT just exposes the shaped queue, keeping BT's Airtable-free boundary intact. Shipped as the MIS half of the cross-repo remarks → PM feature; deployed to prod (`bandwidth-and-utilization.vercel.app`). |
 | 2026-07-10 | **Submitted fellows remain visible when live reconciliation excludes every project.** Keep the fellow at 0 hrs/week, 0%, `Free`, and 0 active projects; mark the row `adjusted`; preserve the excluded-project count in `snapshots`; retain remarks from raw self-reports. | A project can move to an inactive Airtable stage or lose a team assignment after a fellow submits. Removing its hours keeps current capacity honest, but removing the fellow hid both the submission and any flag. The durable zero-load snapshot preserves the reporting trail through finalization and historical drill-downs. |
 | 2026-07-13 | **VP-run role precedence clarified:** VP/AVP1 acts as the mandate director and must project bandwidth for VP/AVP2 as well as associate-slot fellows. This VP-run exception supersedes the general rule that the second VP/AVP self-reports without a senior projection. | A VP-run mandate has no separate director, so VP/AVP1 must perform the director's cross-checking function for the full mandate team. |
+| 2026-08-27 | **Submission conflicts are reconciled against fresh Airtable lifecycle evidence before any reminder, readiness check, finalization, stale-cycle VP default, or manual-resolution action.** A conflict remains live only while its project is in the canonical active-stage set, its stored senior is still the current projection owner, and its other fellow is still an allowed projection target. Verified obsolete conflicts resolve as `project_inactive` with no selected number. `pending_*` projects retain their queue-owned lifecycle, and `director_flag` conflicts retain their existing workflow. Missing submissions or incomplete Airtable evidence are ambiguous, so automation holds the conflict and sends no email. | The LoadShare DDE was terminal after the submissions had created a valid conflict. Its stored conflict could still trigger reminders or a stale-cycle VP default because conflict rows never passed through the same live-project reconciliation used by utilization and peer-email views. Fresh Airtable evidence prevents an obsolete project from driving a number or an email, while preserving the submissions and reminder history that explain what happened. |
+| 2026-08-27 | **Conflict reminders wait 24 hours after the original conflict email, then retain once-per-IST-day cadence with an atomic claim.** `conflicts.email_sent_at` records original delivery. Historical emailed rows received the migration time as the conservative grace point. A reminder claims the row with its previously-read reminder timestamp; provider failure releases the claim, while a later audit-write failure does not risk a duplicate send. | The previous same-IST-day check had no original-email timestamp, so a newly emailed conflict could receive its first reminder shortly after midnight. The claim closes concurrent-cron and repeat-run duplicates without suppressing a retry after a delivery failure. |
 
 ---
 
@@ -162,6 +164,7 @@
 - **`pending_projects` is the one exception to "no Airtable writes."** ie-checkin (a separate app) drains the queue and writes Airtable on BT's behalf. BT itself still doesn't touch Airtable — it just exposes the queue + lifecycle endpoints. The integration boundary is `BT_INTEGRATION_SECRET` headers on `/api/admin/pending-projects/*`. ie-checkin owns all Airtable mutation logic; BT owns lifecycle state.
 - **`lib/similarity.ts` (orphaned since April 28) is now actively used again** — ie-checkin ports the same dice-coefficient function for fuzzy candidate matching against Airtable before creating stubs. Keeping orphaned utilities around can pay off when the next adjacent feature needs them.
 - **The remarks endpoints extend the `pending_projects` exception, same boundary.** `/api/admin/remarks` (atomic claim + dedup) and `/api/admin/remarks/:id/processed` expose bandwidth remarks to ie-checkin under `BT_INTEGRATION_SECRET`; BT still never writes Airtable. **neon-http gotcha (cost us a prod 500):** the `drizzle-orm/neon-http` driver has NO interactive transactions and NO `SELECT … FOR UPDATE`. The first remarks claim used `db.transaction()` + `FOR UPDATE SKIP LOCKED` and 500'd on the first real call (mocked-db unit tests hid it — only live verification caught it). The fix is a single atomic `UPDATE … WHERE id IN (SELECT …) RETURNING` — statement-level row locking is race-safe without a transaction. Any future atomic claim in this app must be one statement; do not reach for `db.transaction`.
+- **Live project lifecycle controls current-cycle conflict action as well as utilization.** Airtable remains authoritative for project stage and team membership. Postgres retains submissions, conflicts, and reminder history as the bandwidth audit trail. A terminal, paused, deleted, superseded, or reassigned project must stop driving reminders, peer-email readiness, and VP-default closure, but its submitted numbers must remain intact. The LoadShare DDE confirmed that a linked active Mandate does not supersede this stage rule: the source DDE becomes obsolete only after Airtable marks that DDE terminal.
 
 ### Notion Rules Governance
 
@@ -170,6 +173,12 @@
 - **One stray rule to watch:** `collection.parse.example.cr-lakh-units` was found Active in the Notion DB during the 2026-06-19 trim but doesn't appear in any synced snapshot. Open question: keep or retire. Not deleted (left untouched); resolve before the next engine sync.
 
 ---
+
+### Remarks feed contract (2026-08-19)
+
+- The Project Tracking System consumes lifecycle evidence from `GET /api/admin/remarks`. Every row must keep its stable `submissionId`, `cycleId`, fellow identity, original remark, project references, and `submittedAt`. The endpoint stays backward-compatible so either app can deploy first.
+- Fellow remarks are evidence, not authority for Airtable lifecycle changes. Project Tracking System aggregates them into director-owned cases; the normal director check-in controls Airtable writes.
+- The Vercel private dependency installer must use `git config --add` for every Git URL rewrite. Replacing the key leaves `git+ssh` unresolved and breaks production installs with host-key verification failures.
 
 ## Open Questions
 

@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-07-13 (historical IY dashboard navigation restored)
+> **Last updated:** 2026-08-27 (stale submission-conflict lifecycle reconciliation shipped)
 
 ## Instructions for Claude
 
@@ -17,6 +17,10 @@
 ---
 
 ## Current Focus
+
+**Conflict lifecycle fix is deployed to production (2026-08-27).** Submission conflicts now re-read Airtable lifecycle evidence before they can send a reminder, hold peer-email readiness, block normal finalization, receive a stale-cycle VP default, or accept a manual resolution. Verified obsolete conflicts close as `project_inactive` without changing the original submissions or reminder history. The LoadShare DDE conflict is resolved with no selected number; the 0 and 6-hour submissions and its 3 prior reminders remain intact. The live dashboard already excludes the terminal DDE, and neither Airtable nor the database needs a cleanup action for this incident.
+
+**Release follow-up:** let the next natural 10:00 AM IST conflict-reminder cron run, then confirm that it sends no LoadShare reminder or history row, closes no ambiguous records automatically, and leaves Director sign-off reminders unchanged. Do not manually call the combined reminder endpoint while Director sign-off recipients are eligible.
 
 **UPDATE (2026-07-10): Reconciled-fellow visibility shipped to prod.** Kabir Thakwani’s July 6 submission exposed an edge case: Zilo moved to `Mandate on Pause` after he submitted, so live reconciliation correctly removed its 60 hours but also removed Kabir’s whole row. The dashboard now retains submitted fellows at 0 hrs/week, 0%, `Free`, and 0 active projects when every project is excluded. It marks them `adjusted`, keeps their remarks from raw submissions, and stores `excluded_project_count` in finalized snapshots so the explanation survives historical drill-downs. Migration `0009` was applied directly to Neon before deployment. Verified live: Kabir appears with 1 excluded project. **Open loose ends remain:** PlatinumRx reconciliation and Vishnu/Shrinithi Airtable cleanup.
 
@@ -127,6 +131,8 @@ Three commits on the branch:
 | 2026-07-10 | Shipped reconciled-fellow visibility fix. Added metadata-returning reconciliation, durable `snapshots.excluded_project_count`, zero-load snapshots for submitted fellows whose projects are later excluded, an adjusted badge and drill-down explanation, and raw-remark preservation. Migration `0009` applied directly to production Neon. Merged to `main`, pushed to IE Central, and deployed Ready as `dpl_BNr4UoaF5SfQqJ5whXktTpY8qWGq`. Live verification confirmed Kabir Thakwani appears at 0 hrs/week, 0%, `Free`, with 1 excluded project. 271 tests passed, TypeScript and production build passed. |
 | 2026-07-13 | Fixed VP-run bandwidth collection regression reported through the Vishnu/Aviral case. Shared role resolution now includes VP/AVP2 among VP/AVP1's projection targets on VP-run mandates; server authorization and conflict emails follow the same rule. Added regression coverage. 274 tests passed; TypeScript, touched-file lint, and production build passed. |
 | 2026-07-13 | Fixed historical IY navigation in the Monthly Report dashboard. The selector now uses a lightweight history-wide snapshot-date query while detailed report data remains scoped to the selected IY. IY26 and IY27 verified live. Committed as `0999e9a` and deployed Ready as `dpl_DUSLgPCz4FHLk5ND7V9xUaC1dY4U`. 276 tests passed. |
+| 2026-08-19 | **Remarks feed timestamp contract and deployment repair shipped.** `GET /api/admin/remarks` now includes `submittedAt` with the existing stable `submissionId`, preserving the original fellow-submission evidence for the Project Tracking System's lifecycle case workflow. The change is backward-compatible. Production deployment initially exposed an existing `vercel-install.sh` issue: repeated `git config` calls replaced the `git+ssh` rewrite and Vercel failed while fetching the private `ie-ai-rulebook` dependency. Changing each rewrite to `git config --add` restored the production build. Verification: 276 tests passed with TypeScript and production build clean; deployed at `bandwidth-and-utilization.vercel.app`. Commits `0445517` and `7b83769`. |
+| 2026-08-27 | **Stale submission-conflict lifecycle reconciliation shipped.** Added idempotent migration `0011_conflict_email_sent_at.sql`, backfilled 145 historical emailed conflicts, and released `ada6a24` to `origin/main`. Airtable is read before every reconciliation write or outbound conflict action. A shared classifier keeps a submission conflict live only while its project has an active canonical stage and the stored senior/other fellow still match the current projection relationship. Terminal, cancelled, paused, deleted, superseded, and reassigned cases resolve atomically as `project_inactive` with no resolved number; `pending_*`, `director_flag`, and ambiguous cases retain their dedicated safe paths. Original conflict emails record `email_sent_at`; reminders wait 24 hours, then claim atomically so repeated or concurrent crons send once per IST day. Production migration readback confirmed zero pending conflicts and no changed workflow statuses. LoadShare remains resolved, its 0 and 6-hour submissions plus 3 reminders are intact, and its separate `awaiting_setup` row is unchanged. 328 tests passed (315 passing, 13 skipped), TypeScript, touched-file lint, production build, and diff check passed. The full lint baseline remains 31 pre-existing errors and 4 warnings. IE Central production deployment `dpl_H57cED6F5z5scdMqiSob1bwfi45T` reached READY. |
 
 ---
 
@@ -137,6 +143,7 @@ Three commits on the branch:
 - ~~v2 post-rollout updates deployed~~ (done, April 20, 2026)
 - ~~First weekly cycle under new cadence~~ (done, auto-triggered Mon April 27, 2026)
 - ~~Resume Airtable writeback~~ (superseded — writeback removed entirely on April 30, 2026; dashboard is the SoT)
+- Confirm the natural 10:00 AM IST conflict-reminder run leaves the resolved LoadShare DDE untouched and preserves existing Director sign-off reminder behavior.
 
 ## Manual Steps Checklist (Pre-Deploy)
 
