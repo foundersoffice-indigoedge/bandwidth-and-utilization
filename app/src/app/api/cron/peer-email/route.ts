@@ -116,6 +116,9 @@ export async function GET(req: NextRequest) {
     const pendingFellowIds = new Set(
       cycleTokens.filter(t => t.status === 'pending').map(t => t.fellowRecordId),
     );
+    const suppressedRecipientIds = new Set(
+      cycleTokens.filter(t => t.status === 'not_needed').map(t => t.fellowRecordId),
+    );
 
     const signoffState = await getSignoffState(cycle.id, allProjects, currentDirectors);
 
@@ -125,7 +128,11 @@ export async function GET(req: NextRequest) {
       allProjects,
       cycle.startDate,
       pendingFellowIds,
-      { signoffPending: signoffState === 'pending', conflictsPending: openConflicts.length > 0 },
+      {
+        signoffPending: signoffState === 'pending',
+        conflictsPending: openConflicts.length > 0,
+        suppressedRecipientIds,
+      },
     );
 
     // Every send failed → release the claim so a later checkpoint can retry

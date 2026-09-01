@@ -94,6 +94,9 @@ interface SubmissionRow {
  *   This is the source of truth for "not yet submitted" — NOT the absence of
  *   submissions — so fellows with no token (no active projects) or marked
  *   `not_needed` are never falsely flagged. Defaults to empty (nobody pending).
+ * @param suppressedRecipientIds Record IDs that must not receive this cycle's
+ *   peer email. They remain in teammate data so other recipients still see the
+ *   complete project picture.
  */
 export function assemblePeerBandwidthData(
   allSubmissions: SubmissionRow[],
@@ -101,6 +104,7 @@ export function assemblePeerBandwidthData(
   allProjects: ProjectAssignment[],
   dateRange: string,
   pendingFellowIds: Set<string> = new Set(),
+  suppressedRecipientIds: Set<string> = new Set(),
 ): PeerEmailModel[] {
   const fellowMap = new Map(fellows.map(f => [f.recordId, f]));
   const eligibleIds = new Set(fellows.map(f => f.recordId));
@@ -203,6 +207,8 @@ export function assemblePeerBandwidthData(
   const models: PeerEmailModel[] = [];
 
   for (const fellow of fellows) {
+    if (suppressedRecipientIds.has(fellow.recordId)) continue;
+
     const teammates = [...(teammateMap.get(fellow.recordId) ?? [])];
     if (teammates.length === 0) continue;
 

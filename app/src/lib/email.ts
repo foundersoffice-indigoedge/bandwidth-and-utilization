@@ -617,6 +617,8 @@ export async function sendCompletionEmail(
  *   (source of truth for "not yet submitted").
  * @param opts.signoffPending    Show a "director sign-off pending" banner.
  * @param opts.conflictsPending  Show a "figures still under resolution" banner.
+ * @param opts.suppressedRecipientIds  Cycle-exempt fellows who must not receive
+ *   the peer snapshot. Their data remains visible to their teammates.
  * @returns counts so the caller can decide whether the batch is healthy.
  */
 export async function sendPeerBandwidthEmails(
@@ -633,11 +635,22 @@ export async function sendPeerBandwidthEmails(
   allProjects: import('@/types').ProjectAssignment[],
   startDate: string,
   pendingFellowIds: Set<string>,
-  opts: { signoffPending?: boolean; conflictsPending?: boolean } = {},
+  opts: {
+    signoffPending?: boolean;
+    conflictsPending?: boolean;
+    suppressedRecipientIds?: Set<string>;
+  } = {},
 ): Promise<{ attempted: number; sent: number; failed: number }> {
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   const dateRange = formatDateRange(startDate);
-  const models = assemblePeerBandwidthData(allSubmissions, fellows, allProjects, dateRange, pendingFellowIds);
+  const models = assemblePeerBandwidthData(
+    allSubmissions,
+    fellows,
+    allProjects,
+    dateRange,
+    pendingFellowIds,
+    opts.suppressedRecipientIds,
+  );
 
   let sent = 0;
   let failed = 0;

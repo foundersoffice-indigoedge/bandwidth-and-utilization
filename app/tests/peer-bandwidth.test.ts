@@ -81,6 +81,21 @@ describe('assemblePeerBandwidthData', () => {
     expect(ids).toEqual(['rA', 'rB', 'rC'].sort());
   });
 
+  it('suppresses a cycle-exempt recipient while preserving them as teammate data', () => {
+    const result = assemblePeerBandwidthData(
+      submissions,
+      fellows,
+      projects,
+      'Apr 27 – May 3, 2026',
+      new Set(),
+      new Set(['rB']),
+    );
+
+    expect(result.map(m => m.recipient.recordId)).not.toContain('rB');
+    const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
+    expect(aliceModel.teammates.map(t => t.recordId)).toContain('rB');
+  });
+
   it('marks shared projects correctly', () => {
     const result = assemblePeerBandwidthData(submissions, fellows, projects, 'Apr 27 – May 3, 2026');
     const aliceModel = result.find(m => m.recipient.recordId === 'rA')!;
