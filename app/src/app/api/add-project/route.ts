@@ -9,6 +9,7 @@ import { sendConflictEmail } from '@/lib/email';
 import { postNewProject } from '@/lib/slack';
 import { fetchEligibleFellows, isVpOrAvp } from '@/lib/airtable/fellows';
 import { isPendingProjectSenior } from '@/lib/project-role';
+import { createSubmissionConflict } from '@/lib/submission-persistence';
 
 type ProjectType = 'mandate' | 'dde' | 'pitch';
 
@@ -120,30 +121,27 @@ export async function POST(req: NextRequest) {
           .limit(1);
 
         if (existingSelf && isConflict(tbHpd, existingSelf.hoursPerDay)) {
-          const resToken = crypto.randomUUID();
-          const [conflictRow] = await db
-            .insert(conflicts)
-            .values({
-              cycleId: tokenRecord.cycleId,
-              projectRecordId,
-              vpSubmissionId: projSub.id,
-              associateSubmissionId: existingSelf.id,
-              vpHoursPerDay: tbHpd,
-              associateHoursPerDay: existingSelf.hoursPerDay,
-              difference: Math.abs(tbHpd - existingSelf.hoursPerDay),
-              resolutionToken: resToken,
-            })
-            .returning();
+          const conflictRow = await createSubmissionConflict(db, {
+            cycleId: tokenRecord.cycleId,
+            projectRecordId,
+            vpSubmissionId: projSub.id,
+            associateSubmissionId: existingSelf.id,
+            vpHoursPerDay: tbHpd,
+            associateHoursPerDay: existingSelf.hoursPerDay,
+            resolutionToken: crypto.randomUUID(),
+          });
 
-          const teammateRoleLabel = isVpOrAvp(teammate.designation) ? 'Performing Associate role' : undefined;
-          const emailId = await sendConflictEmail(
-            tokenRecord.fellowName, tokenRecord.fellowEmail,
-            teammate.name, teammate.email,
-            payload.name.trim(), tbHpd, existingSelf.hoursPerDay, resToken,
-            teammateRoleLabel,
-          );
-          if (emailId) {
-            await db.update(conflicts).set({ emailMessageId: emailId, emailSentAt: new Date() }).where(eq(conflicts.id, conflictRow.id));
+          if (conflictRow) {
+            const teammateRoleLabel = isVpOrAvp(teammate.designation) ? 'Performing Associate role' : undefined;
+            const emailId = await sendConflictEmail(
+              tokenRecord.fellowName, tokenRecord.fellowEmail,
+              teammate.name, teammate.email,
+              payload.name.trim(), tbHpd, existingSelf.hoursPerDay, conflictRow.resolutionToken,
+              teammateRoleLabel,
+            );
+            if (emailId) {
+              await db.update(conflicts).set({ emailMessageId: emailId, emailSentAt: new Date() }).where(eq(conflicts.id, conflictRow.id));
+            }
           }
         }
       }

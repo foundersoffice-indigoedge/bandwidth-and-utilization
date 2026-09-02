@@ -74,7 +74,9 @@ export default async function SubmitPage({
         ? [creatorId, ...otherIds.filter(id => id !== creatorId)]
         : otherIds;
 
-      const associates = canProjectForPending
+      // Pending-project projections belong to the senior who created the row.
+      // Keep this visibility rule identical to the API's authorization rule.
+      const associates = canProjectForPending && creatorId === fellowRecordId
         ? teammateIds
             .map(id => fellows.find(f => f.recordId === id))
             .filter((f): f is NonNullable<typeof f> => f != null)

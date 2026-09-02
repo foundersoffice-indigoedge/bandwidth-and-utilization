@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, date, timestamp, real, integer, boolean, jsonb, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import type { ProjectBreakdownItem } from '@/types';
 
 export const cycles = pgTable('cycles', {
@@ -64,7 +65,14 @@ export const submissions = pgTable('submissions', {
   hoursPerWeek: real('hours_per_week'),
   remarksClaimedAt: timestamp('remarks_claimed_at'),
   remarksProcessedAt: timestamp('remarks_processed_at'),
-});
+}, table => [
+  uniqueIndex('submissions_self_report_identity_unique')
+    .on(table.cycleId, table.fellowRecordId, table.projectRecordId)
+    .where(sql`${table.isSelfReport} = true`),
+  uniqueIndex('submissions_projection_identity_unique')
+    .on(table.cycleId, table.fellowRecordId, table.projectRecordId, table.targetFellowId)
+    .where(sql`${table.isSelfReport} = false AND ${table.targetFellowId} IS NOT NULL`),
+]);
 
 export const directorSignoffs = pgTable('director_signoffs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -112,7 +120,11 @@ export const conflicts = pgTable('conflicts', {
   signoffId: uuid('signoff_id').references(() => directorSignoffs.id),
   resolverFellowId: text('resolver_fellow_id'),
   resolverEmail: text('resolver_email'),
-});
+}, table => [
+  uniqueIndex('conflicts_submission_pair_unique')
+    .on(table.cycleId, table.projectRecordId, table.vpSubmissionId, table.associateSubmissionId)
+    .where(sql`${table.source} = 'submission' AND ${table.vpSubmissionId} IS NOT NULL AND ${table.associateSubmissionId} IS NOT NULL`),
+]);
 
 export const snapshots = pgTable('snapshots', {
   id: uuid('id').defaultRandom().primaryKey(),
