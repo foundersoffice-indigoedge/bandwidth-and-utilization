@@ -1,7 +1,7 @@
 # Utilization MIS — Progress Tracker
 
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-08-27 (stale submission-conflict lifecycle reconciliation shipped)
+> **Last updated:** 2026-09-02 (pending teammate submission fix shipped; Rubik backfilled)
 
 ## Instructions for Claude
 
@@ -17,6 +17,8 @@
 ---
 
 ## Current Focus
+
+**Pending-project teammate submission loss fixed and deployed (2026-09-02).** Kanishka Gupta's Rubick AI form row was visible because she was a listed teammate, but the old final-submit path only updated a pre-created submission row. Nihar's creator-owned projection existed while Kanishka's self row did not, so her 2026-08-31 form submission silently dropped Rubick and still consumed the token. `e4e9347` adds server-owned whole-payload validation, atomic self/projection upserts, partial unique indexes, and idempotent submission-conflict creation. Migration `0012_submission_idempotency.sql` is applied to production. Vercel deployment `dpl_2nUseov3sCgZhQKEYhdCLFhmQQwW` is Ready. Kanishka's backfill `4a1daad7-85ae-405f-9844-0aae8410bfff` records 2 hrs/day, 12 hrs/week; her live total is 66 hrs/week, 78.6%, `Busy`, and Rubick appears once as her self-report. Airtable, Slack, peer-email, and sign-off state were left untouched. A read-only historical scan found 9 earlier rows with the same signature, held for separate review.
 
 **Conflict lifecycle fix is deployed to production (2026-08-27).** Submission conflicts now re-read Airtable lifecycle evidence before they can send a reminder, hold peer-email readiness, block normal finalization, receive a stale-cycle VP default, or accept a manual resolution. Verified obsolete conflicts close as `project_inactive` without changing the original submissions or reminder history. The LoadShare DDE conflict is resolved with no selected number; the 0 and 6-hour submissions and its 3 prior reminders remain intact. The live dashboard already excludes the terminal DDE, and neither Airtable nor the database needs a cleanup action for this incident.
 
@@ -69,6 +71,7 @@ Three commits on the branch:
 
 | Date | What happened |
 |------|---------------|
+| 2026-09-02 | **Pending-project teammate submission loss fixed, deployed, and Rubick backfilled.** Kanishka Gupta's Aug 31 Rubick AI entry exposed a split lifecycle: the form correctly included a pending project for its teammates, but `/api/submit` only updated rows created for the project creator and silently skipped a missing teammate self-report before marking the token submitted. `e4e9347` replaces that branch with whole-payload validation plus atomic upserts, adds partial unique indexes for self-report, projection, and conflict identities (`0012_submission_idempotency.sql`), and makes conflict creation retry-safe. Production preflight found zero duplicate identities; a rolled-back production transaction proved the exact upsert updates one row. Vercel production deployment `dpl_2nUseov3sCgZhQKEYhdCLFhmQQwW` reached Ready. Backfill `4a1daad7-85ae-405f-9844-0aae8410bfff` added Kanishka's 2 hrs/day, 12 hrs/week Rubick self-report without any outbound notification. Live read-back: 66 hrs/week, 78.6%, `Busy`, one Rubick timeline point, and zero Kanishka-Rubick conflicts. 328 tests passed, 13 were intentionally skipped, TypeScript, changed-file lint, and production build passed. |
 | 2026-04-07 | Brainstormed system design, evaluated 3 architecture options (Vercel Full-Stack, Airtable-Centric, Hybrid), chose Option A |
 | 2026-04-07 | Wrote full design spec (`docs/superpowers/specs/2026-04-07-utilization-mis-design.md`) covering all 14 sections |
 | 2026-04-07 | Wrote 17-task implementation plan (`docs/superpowers/plans/2026-04-07-utilization-mis.md`) |
