@@ -15,7 +15,10 @@ export async function POST(
   }
 
   const { id } = await params;
-  const body = (await req.json().catch(() => null)) as { airtableRecordId?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    airtableRecordId?: string;
+    airtableProjectName?: string;
+  } | null;
   if (!body?.airtableRecordId) {
     return NextResponse.json({ error: 'airtableRecordId is required' }, { status: 400 });
   }
@@ -27,6 +30,18 @@ export async function POST(
 
   if (row.status === 'awaiting_setup') {
     if (row.airtableRecordId === body.airtableRecordId) {
+      if (body.airtableProjectName && row.airtableProjectName && row.airtableProjectName !== body.airtableProjectName) {
+        return NextResponse.json(
+          { error: 'Already awaiting_setup with a different airtableProjectName' },
+          { status: 409 },
+        );
+      }
+      if (body.airtableProjectName && !row.airtableProjectName) {
+        await db
+          .update(pendingProjects)
+          .set({ airtableProjectName: body.airtableProjectName })
+          .where(eq(pendingProjects.id, id));
+      }
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json(
@@ -41,7 +56,11 @@ export async function POST(
 
   await db
     .update(pendingProjects)
-    .set({ status: 'awaiting_setup', airtableRecordId: body.airtableRecordId })
+    .set({
+      status: 'awaiting_setup',
+      airtableRecordId: body.airtableRecordId,
+      airtableProjectName: body.airtableProjectName ?? row.name,
+    })
     .where(eq(pendingProjects.id, id));
 
   return NextResponse.json({ ok: true });

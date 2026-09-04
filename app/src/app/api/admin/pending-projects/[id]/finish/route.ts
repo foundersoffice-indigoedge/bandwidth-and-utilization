@@ -3,6 +3,10 @@ import { db } from '@/lib/db';
 import { pendingProjects } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { isAuthorizedIntegrationRequest } from '@/lib/integration-auth';
+import {
+  PendingProjectReconciliationHold,
+  reconcileCompletedPendingProject,
+} from '@/lib/pending-project-reconciliation';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +36,10 @@ export async function POST(
 
   if (row.status === 'finished') {
     if (row.resolution === body.resolution) {
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+        reconciliation: { promotedSubmissions: 0, collapsedDuplicates: 0, updatedConflicts: 0, repairedSnapshots: 0 },
+      });
     }
     return NextResponse.json(
       { error: `Already finished with resolution=${row.resolution}` },
@@ -47,10 +54,24 @@ export async function POST(
     );
   }
 
-  await db
-    .update(pendingProjects)
-    .set({ status: 'finished', resolution: body.resolution, resolvedAt: new Date() })
-    .where(eq(pendingProjects.id, id));
+  if (body.resolution === 'rejected') {
+    await db
+      .update(pendingProjects)
+      .set({ status: 'finished', resolution: body.resolution, resolvedAt: new Date() })
+      .where(eq(pendingProjects.id, id));
+    return NextResponse.json({
+      ok: true,
+      reconciliation: { promotedSubmissions: 0, collapsedDuplicates: 0, updatedConflicts: 0, repairedSnapshots: 0 },
+    });
+  }
 
-  return NextResponse.json({ ok: true });
+  try {
+    const reconciliation = await reconcileCompletedPendingProject(row);
+    return NextResponse.json({ ok: true, reconciliation });
+  } catch (error) {
+    if (error instanceof PendingProjectReconciliationHold) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
+  }
 }

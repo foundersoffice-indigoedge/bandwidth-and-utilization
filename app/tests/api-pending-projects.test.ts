@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockSelect = vi.fn();
-const mockUpdate = vi.fn();
-const mockUpdateReturning = vi.fn();
+const { mockSelect, mockUpdate, mockUpdateReturning, mockReconcileCompletedPendingProject } = vi.hoisted(() => ({
+  mockSelect: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockUpdateReturning: vi.fn(),
+  mockReconcileCompletedPendingProject: vi.fn(),
+}));
 
 vi.mock('@/lib/db', () => ({
   db: {
@@ -24,6 +27,13 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
+vi.mock('@/lib/pending-project-reconciliation', () => ({
+  PendingProjectReconciliationHold: class PendingProjectReconciliationHold extends Error {
+    status = 409;
+  },
+  reconcileCompletedPendingProject: mockReconcileCompletedPendingProject,
+}));
+
 import { GET as getPending } from '../src/app/api/admin/pending-projects/route';
 import { GET as getAwaiting } from '../src/app/api/admin/pending-projects/awaiting-setup/route';
 import { POST as postAwaitingSetup } from '../src/app/api/admin/pending-projects/[id]/awaiting-setup/route';
@@ -37,6 +47,7 @@ beforeEach(() => {
   mockSelect.mockReset();
   mockUpdate.mockReset();
   mockUpdateReturning.mockReset();
+  mockReconcileCompletedPendingProject.mockReset();
 });
 
 const auth = { headers: { authorization: `Bearer ${SECRET}` } };
@@ -160,11 +171,18 @@ describe('POST finish', () => {
 
   it('transitions awaiting_setup -> finished with completed', async () => {
     mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'awaiting_setup' }]);
+    mockReconcileCompletedPendingProject.mockResolvedValueOnce({
+      promotedSubmissions: 1,
+      collapsedDuplicates: 0,
+      updatedConflicts: 0,
+      repairedSnapshots: 0,
+    });
     const res = await postFinish(
       new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ resolution: 'completed' }) }),
       { params }
     );
     expect(res.status).toBe(200);
+    expect(mockReconcileCompletedPendingProject).toHaveBeenCalledTimes(1);
   });
 
   it('is idempotent for same resolution', async () => {

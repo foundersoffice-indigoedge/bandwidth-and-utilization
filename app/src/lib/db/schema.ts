@@ -153,8 +153,12 @@ export const pendingProjects = pgTable('pending_projects', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   status: text('status', { enum: ['pending', 'awaiting_setup', 'finished', 'confirming'] }).notNull().default('pending'),
   airtableRecordId: text('airtable_record_id'),
+  /** Canonical Airtable display name used when pending references are promoted. */
+  airtableProjectName: text('airtable_project_name'),
   resolution: text('resolution', { enum: ['completed', 'rejected'] }),
   resolvedAt: timestamp('resolved_at'),
+  /** Set only after every pending_ reference and frozen snapshot has been reconciled. */
+  referencesReconciledAt: timestamp('references_reconciled_at'),
 });
 
 export const conflictRemindersSent = pgTable('conflict_reminders_sent', {
