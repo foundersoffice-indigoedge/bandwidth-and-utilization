@@ -9,6 +9,12 @@ type ConflictRow = typeof conflicts.$inferSelect;
 type SnapshotRow = typeof snapshots.$inferSelect;
 type PendingProjectRow = typeof pendingProjects.$inferSelect;
 
+/** PostgreSQL UUID ordering is bytewise, so fingerprints must avoid locale collation. */
+function compareStableIds(left: { id: string }, right: { id: string }): number {
+  if (left.id === right.id) return 0;
+  return left.id < right.id ? -1 : 1;
+}
+
 export interface ReconciliationCounts {
   promotedSubmissions: number;
   collapsedDuplicates: number;
@@ -190,7 +196,7 @@ function submissionFingerprint(rows: SubmissionRow[]): string {
       targetFellowId: row.targetFellowId,
       remarks: row.remarks,
     }))
-    .sort((left, right) => left.id.localeCompare(right.id)));
+    .sort(compareStableIds));
 }
 
 function conflictFingerprint(rows: ConflictRow[]): string {
@@ -203,7 +209,7 @@ function conflictFingerprint(rows: ConflictRow[]): string {
       associateSubmissionId: row.associateSubmissionId,
       source: row.source,
     }))
-    .sort((left, right) => left.id.localeCompare(right.id)));
+    .sort(compareStableIds));
 }
 
 function snapshotFingerprint(rows: SnapshotRow[]): string {
@@ -217,7 +223,7 @@ function snapshotFingerprint(rows: SnapshotRow[]): string {
       hoursUtilizationPct: row.hoursUtilizationPct,
       hoursLoadTag: row.hoursLoadTag,
     }))
-    .sort((left, right) => left.id.localeCompare(right.id)));
+    .sort(compareStableIds));
 }
 
 function assertPendingCanBeCompleted(row: PendingProjectRow): asserts row is PendingProjectRow & { airtableRecordId: string } {
@@ -230,10 +236,10 @@ function assertPendingCanBeCompleted(row: PendingProjectRow): asserts row is Pen
 }
 
 export async function reconcileCompletedPendingProject(row: PendingProjectRow): Promise<ReconciliationCounts> {
-  assertPendingCanBeCompleted(row);
   if (row.referencesReconciledAt) {
     return { promotedSubmissions: 0, collapsedDuplicates: 0, updatedConflicts: 0, repairedSnapshots: 0 };
   }
+  assertPendingCanBeCompleted(row);
 
   const pendingReference = `pending_${row.id}`;
   // Awaiting rows created before the additive migration can still complete.
@@ -294,7 +300,7 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
             'hoursUtilizationPct', hours_utilization_pct, 'hoursLoadTag', hours_load_tag
           ) ORDER BY id)
           FROM snapshots WHERE id = ANY(${snapshotRows.map((snapshot) => snapshot.id)}::uuid[])
-        ), '[]'::jsonb) = ${snapshotStateFingerprint}::jsonb THEN 1 ELSE 1 / 0 END AS snapshot_guard`
+        ), '[]'::jsonb) = ${snapshotStateFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS snapshot_guard`
       : tx`SELECT 1 AS snapshot_guard`;
 
     return [
@@ -306,7 +312,7 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         AND airtable_record_id = ${row.airtableRecordId}
         AND COALESCE(airtable_project_name, name) = ${canonicalProjectName}
         AND references_reconciled_at IS NULL
-    ) THEN 1 ELSE 1 / 0 END AS pending_guard`,
+    ) THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS pending_guard`,
     tx`SELECT CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'fellowRecordId', fellow_record_id,
@@ -316,7 +322,7 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         'isSelfReport', is_self_report, 'targetFellowId', target_fellow_id, 'remarks', remarks
       ) ORDER BY id)
       FROM submissions WHERE project_record_id = ${pendingReference}
-    ), '[]'::jsonb) = ${sourceFingerprint}::jsonb THEN 1 ELSE 1 / 0 END AS source_guard`,
+    ), '[]'::jsonb) = ${sourceFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS source_guard`,
     tx`SELECT CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'fellowRecordId', fellow_record_id,
@@ -326,21 +332,21 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         'isSelfReport', is_self_report, 'targetFellowId', target_fellow_id, 'remarks', remarks
       ) ORDER BY id)
       FROM submissions WHERE project_record_id = ${row.airtableRecordId}
-    ), '[]'::jsonb) = ${canonicalFingerprint}::jsonb THEN 1 ELSE 1 / 0 END AS canonical_guard`,
+    ), '[]'::jsonb) = ${canonicalFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS canonical_guard`,
     tx`SELECT CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'projectRecordId', project_record_id,
         'vpSubmissionId', vp_submission_id, 'associateSubmissionId', associate_submission_id, 'source', source
       ) ORDER BY id)
       FROM conflicts WHERE project_record_id = ${pendingReference}
-    ), '[]'::jsonb) = ${pendingConflictFingerprint}::jsonb THEN 1 ELSE 1 / 0 END AS pending_conflict_guard`,
+    ), '[]'::jsonb) = ${pendingConflictFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS pending_conflict_guard`,
     tx`SELECT CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'projectRecordId', project_record_id,
         'vpSubmissionId', vp_submission_id, 'associateSubmissionId', associate_submission_id, 'source', source
       ) ORDER BY id)
       FROM conflicts WHERE project_record_id = ${row.airtableRecordId}
-    ), '[]'::jsonb) = ${canonicalConflictFingerprint}::jsonb THEN 1 ELSE 1 / 0 END AS canonical_conflict_guard`,
+    ), '[]'::jsonb) = ${canonicalConflictFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS canonical_conflict_guard`,
     snapshotGuard,
     ...plan.collapseSubmissionIds.map((id) => tx`
       DELETE FROM submissions WHERE id = ${id} AND project_record_id = ${pendingReference}
