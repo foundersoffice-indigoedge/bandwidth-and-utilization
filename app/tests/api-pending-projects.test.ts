@@ -44,6 +44,7 @@ import { POST as postAwaitingSetup } from '../src/app/api/admin/pending-projects
 import { POST as postFinish } from '../src/app/api/admin/pending-projects/[id]/finish/route';
 import { POST as postConfirming } from '../src/app/api/admin/pending-projects/[id]/confirming/route';
 import { GET as getById } from '../src/app/api/admin/pending-projects/[id]/route';
+import { PendingProjectReconciliationHold } from '../src/lib/pending-project-reconciliation';
 
 const SECRET = 'test-secret-xyz';
 beforeEach(() => {
@@ -188,6 +189,19 @@ describe('POST finish', () => {
     );
     expect(res.status).toBe(200);
     expect(mockReconcileCompletedPendingProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns 409 when the atomic reconciliation guard detects drift', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'awaiting_setup' }]);
+    mockReconcileCompletedPendingProject.mockRejectedValueOnce(
+      new PendingProjectReconciliationHold('Pending project changed during reconciliation.')
+    );
+    const res = await postFinish(
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ resolution: 'completed' }) }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'Pending project changed during reconciliation.' });
   });
 
   it('is idempotent for same resolution', async () => {

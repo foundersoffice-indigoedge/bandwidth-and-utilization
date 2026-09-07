@@ -31,6 +31,10 @@ export class PendingProjectReconciliationHold extends Error {
   }
 }
 
+export function isPendingProjectGuardError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '22012';
+}
+
 function nullableEqual<T>(left: T | null, right: T | null): boolean {
   return left === right;
 }
@@ -295,29 +299,30 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
   const canonicalConflictFingerprint = conflictFingerprint(canonicalConflictRows);
   const snapshotStateFingerprint = snapshotFingerprint(snapshotRows);
 
-  await sql.transaction((tx) => {
-    const snapshotGuard = snapshotRows.length > 0
-      ? tx`SELECT CASE WHEN COALESCE((
+  try {
+    await sql.transaction((tx) => {
+      const snapshotGuard = snapshotRows.length > 0
+      ? tx`SELECT 1 / CASE WHEN COALESCE((
           SELECT jsonb_agg(jsonb_build_object(
             'id', id, 'cycleId', cycle_id, 'fellowRecordId', fellow_record_id,
             'projectBreakdown', project_breakdown, 'totalHoursPerWeek', total_hours_per_week,
             'hoursUtilizationPct', hours_utilization_pct, 'hoursLoadTag', hours_load_tag
           ) ORDER BY id)
           FROM snapshots WHERE id = ANY(${snapshotRows.map((snapshot) => snapshot.id)}::uuid[])
-        ), '[]'::jsonb) = ${snapshotStateFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS snapshot_guard`
+        ), '[]'::jsonb) = ${snapshotStateFingerprint}::jsonb THEN 1 ELSE 0 END AS snapshot_guard`
       : tx`SELECT 1 AS snapshot_guard`;
 
-    return [
-      tx`SELECT pg_advisory_xact_lock(hashtext(${`pending-project:${row.id}`}))`,
-    tx`SELECT CASE WHEN EXISTS (
+      return [
+        tx`SELECT pg_advisory_xact_lock(hashtext(${`pending-project:${row.id}`}))`,
+    tx`SELECT 1 / CASE WHEN EXISTS (
       SELECT 1 FROM pending_projects
       WHERE id = ${row.id}
         AND status = 'awaiting_setup'
         AND airtable_record_id = ${row.airtableRecordId}
         AND COALESCE(airtable_project_name, name) = ${canonicalProjectName}
         AND references_reconciled_at IS NULL
-    ) THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS pending_guard`,
-    tx`SELECT CASE WHEN COALESCE((
+    ) THEN 1 ELSE 0 END AS pending_guard`,
+    tx`SELECT 1 / CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'fellowRecordId', fellow_record_id,
         'projectRecordId', project_record_id, 'projectName', project_name,
@@ -326,8 +331,8 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         'isSelfReport', is_self_report, 'targetFellowId', target_fellow_id, 'remarks', remarks
       ) ORDER BY id)
       FROM submissions WHERE project_record_id = ${pendingReference}
-    ), '[]'::jsonb) = ${sourceFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS source_guard`,
-    tx`SELECT CASE WHEN COALESCE((
+    ), '[]'::jsonb) = ${sourceFingerprint}::jsonb THEN 1 ELSE 0 END AS source_guard`,
+    tx`SELECT 1 / CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'fellowRecordId', fellow_record_id,
         'projectRecordId', project_record_id, 'projectName', project_name,
@@ -336,21 +341,21 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         'isSelfReport', is_self_report, 'targetFellowId', target_fellow_id, 'remarks', remarks
       ) ORDER BY id)
       FROM submissions WHERE project_record_id = ${row.airtableRecordId}
-    ), '[]'::jsonb) = ${canonicalFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS canonical_guard`,
-    tx`SELECT CASE WHEN COALESCE((
+    ), '[]'::jsonb) = ${canonicalFingerprint}::jsonb THEN 1 ELSE 0 END AS canonical_guard`,
+    tx`SELECT 1 / CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'projectRecordId', project_record_id,
         'vpSubmissionId', vp_submission_id, 'associateSubmissionId', associate_submission_id, 'source', source
       ) ORDER BY id)
       FROM conflicts WHERE project_record_id = ${pendingReference}
-    ), '[]'::jsonb) = ${pendingConflictFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS pending_conflict_guard`,
-    tx`SELECT CASE WHEN COALESCE((
+    ), '[]'::jsonb) = ${pendingConflictFingerprint}::jsonb THEN 1 ELSE 0 END AS pending_conflict_guard`,
+    tx`SELECT 1 / CASE WHEN COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'id', id, 'cycleId', cycle_id, 'projectRecordId', project_record_id,
         'vpSubmissionId', vp_submission_id, 'associateSubmissionId', associate_submission_id, 'source', source
       ) ORDER BY id)
       FROM conflicts WHERE project_record_id = ${row.airtableRecordId}
-    ), '[]'::jsonb) = ${canonicalConflictFingerprint}::jsonb THEN 1 ELSE 1 / (length(current_setting('application_name')) - length(current_setting('application_name'))) END AS canonical_conflict_guard`,
+    ), '[]'::jsonb) = ${canonicalConflictFingerprint}::jsonb THEN 1 ELSE 0 END AS canonical_conflict_guard`,
     snapshotGuard,
     ...plan.collapseSubmissionIds.map((id) => tx`
       DELETE FROM submissions WHERE id = ${id} AND project_record_id = ${pendingReference}
@@ -381,8 +386,16 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
         AND status = 'awaiting_setup'
         AND references_reconciled_at IS NULL
     `,
-    ];
-  }, { isolationLevel: 'Serializable' });
+      ];
+    }, { isolationLevel: 'Serializable' });
+  } catch (error) {
+    if (isPendingProjectGuardError(error)) {
+      throw new PendingProjectReconciliationHold(
+        `Pending project ${row.id} changed during reconciliation. Re-run the review against its latest state.`,
+      );
+    }
+    throw error;
+  }
 
   return {
     promotedSubmissions: plan.promoteSubmissionIds.length,

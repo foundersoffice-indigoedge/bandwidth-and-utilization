@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PendingProjectReconciliationHold,
+  isPendingProjectGuardError,
   isExactSubmissionDuplicate,
   planSnapshotRepairs,
   planSubmissionReconciliation,
@@ -26,6 +27,12 @@ const source = {
 };
 
 describe('pending project reconciliation plan', () => {
+  it('recognizes only the transaction guard SQLSTATE', () => {
+    expect(isPendingProjectGuardError({ code: '22012' })).toBe(true);
+    expect(isPendingProjectGuardError({ code: '23505' })).toBe(false);
+    expect(isPendingProjectGuardError(new Error('division by zero'))).toBe(false);
+  });
+
   it('promotes a pending-only submission', () => {
     expect(planSubmissionReconciliation([source], [])).toEqual({
       collapseSubmissionIds: [],
