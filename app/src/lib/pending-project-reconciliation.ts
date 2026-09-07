@@ -115,6 +115,9 @@ export function planSnapshotRepairs(
 ): SnapshotRepair[] {
   const sourceByCycleAndFellow = new Map<string, SubmissionRow[]>();
   for (const source of sourceRows) {
+    // Projected teammate rows retain the reporting senior in fellowRecordId,
+    // but they are not lines in that senior's frozen personal snapshot.
+    if (!source.isSelfReport) continue;
     const key = `${source.cycleId}:${source.fellowRecordId}`;
     sourceByCycleAndFellow.set(key, [...(sourceByCycleAndFellow.get(key) ?? []), source]);
   }
@@ -270,10 +273,11 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
     }
   }
 
-  const snapshotRows = sourceRows.length === 0
+  const snapshotSourceRows = sourceRows.filter((source) => source.isSelfReport);
+  const snapshotRows = snapshotSourceRows.length === 0
     ? []
     : await db.select().from(snapshots).where(or(
-      ...sourceRows.map((source) => and(eq(snapshots.cycleId, source.cycleId), eq(snapshots.fellowRecordId, source.fellowRecordId))),
+      ...snapshotSourceRows.map((source) => and(eq(snapshots.cycleId, source.cycleId), eq(snapshots.fellowRecordId, source.fellowRecordId))),
     ));
   const snapshotRepairs = planSnapshotRepairs(
     snapshotRows,

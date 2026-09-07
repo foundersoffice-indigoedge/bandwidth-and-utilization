@@ -107,4 +107,109 @@ describe('pending project reconciliation plan', () => {
     });
     expect(repair.totalHoursPerWeek).toBe(48);
   });
+
+  it('repairs only the self-report line when a pending project also has a teammate projection', () => {
+    const peerProjection = {
+      ...source,
+      id: '66666666-6666-4666-8666-666666666666',
+      isSelfReport: false,
+      targetFellowId: 'recTeammate',
+      hoursValue: 3,
+      hoursPerDay: 3,
+      hoursPerWeek: 18,
+    };
+    const snapshot = {
+      id: '55555555-5555-4555-8555-555555555555',
+      cycleId: source.cycleId,
+      fellowRecordId: source.fellowRecordId,
+      projectBreakdown: [
+        { projectRecordId: source.projectRecordId, projectName: source.projectName, projectType: 'pitch' as const, hoursPerDay: 1, hoursPerWeek: 6 },
+      ],
+      totalHoursPerWeek: 48,
+      hoursUtilizationPct: 48 / 84,
+      hoursLoadTag: 'Comfortable',
+    } as Parameters<typeof planSnapshotRepairs>[0][number];
+
+    const [repair] = planSnapshotRepairs(
+      [snapshot],
+      [source, peerProjection],
+      new Set(),
+      'recCanonical',
+      'GPS Renewables Pitch | Aug 2026',
+      source.projectRecordId,
+    );
+
+    expect(repair.newBreakdown).toEqual([
+      { projectRecordId: 'recCanonical', projectName: 'GPS Renewables Pitch | Aug 2026', projectType: 'pitch', hoursPerDay: 1, hoursPerWeek: 6 },
+    ]);
+    expect(repair.totalHoursPerWeek).toBe(48);
+  });
+
+  it('does not require a frozen personal snapshot line for a peer-only projection', () => {
+    const peerProjection = {
+      ...source,
+      id: '66666666-6666-4666-8666-666666666666',
+      isSelfReport: false,
+      targetFellowId: 'recTeammate',
+      hoursValue: 3,
+      hoursPerDay: 3,
+      hoursPerWeek: 18,
+    };
+    const snapshot = {
+      id: '55555555-5555-4555-8555-555555555555',
+      cycleId: source.cycleId,
+      fellowRecordId: source.fellowRecordId,
+      projectBreakdown: [
+        { projectRecordId: 'recOther', projectName: 'Other work', projectType: 'mandate' as const, hoursPerDay: 2, hoursPerWeek: 12 },
+      ],
+      totalHoursPerWeek: 48,
+      hoursUtilizationPct: 48 / 84,
+      hoursLoadTag: 'Comfortable',
+    } as Parameters<typeof planSnapshotRepairs>[0][number];
+
+    expect(planSnapshotRepairs(
+      [snapshot],
+      [peerProjection],
+      new Set(),
+      'recCanonical',
+      'GPS Renewables Pitch | Aug 2026',
+      source.projectRecordId,
+    )).toEqual([]);
+  });
+
+  it('does not subtract a collapsed peer projection from the reporter snapshot', () => {
+    const peerProjection = {
+      ...source,
+      id: '66666666-6666-4666-8666-666666666666',
+      isSelfReport: false,
+      targetFellowId: 'recTeammate',
+      hoursValue: 3,
+      hoursPerDay: 3,
+      hoursPerWeek: 18,
+    };
+    const canonicalPeer = { ...peerProjection, id: '77777777-7777-4777-8777-777777777777', projectRecordId: 'recCanonical' };
+    const plan = planSubmissionReconciliation([peerProjection], [canonicalPeer]);
+    expect(plan.collapseSubmissionIds).toEqual([peerProjection.id]);
+
+    const snapshot = {
+      id: '55555555-5555-4555-8555-555555555555',
+      cycleId: source.cycleId,
+      fellowRecordId: source.fellowRecordId,
+      projectBreakdown: [
+        { projectRecordId: 'recOther', projectName: 'Other work', projectType: 'mandate' as const, hoursPerDay: 2, hoursPerWeek: 12 },
+      ],
+      totalHoursPerWeek: 12,
+      hoursUtilizationPct: 12 / 84,
+      hoursLoadTag: 'Comfortable',
+    } as Parameters<typeof planSnapshotRepairs>[0][number];
+    expect(planSnapshotRepairs(
+      [snapshot],
+      [peerProjection],
+      new Set(plan.collapseSubmissionIds),
+      'recCanonical',
+      'GPS Renewables Pitch | Aug 2026',
+      source.projectRecordId,
+    )).toEqual([]);
+    expect(snapshot.totalHoursPerWeek).toBe(12);
+  });
 });
