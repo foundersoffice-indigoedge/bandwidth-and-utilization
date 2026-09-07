@@ -253,16 +253,12 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
   // New callers always provide the actual Airtable name through awaiting-setup.
   const canonicalProjectName = row.airtableProjectName ?? row.name;
   const sourceRows = await db.select().from(submissions).where(eq(submissions.projectRecordId, pendingReference));
-  const canonicalRows = sourceRows.length === 0
-    ? []
-    : await db.select().from(submissions).where(eq(submissions.projectRecordId, row.airtableRecordId));
+  const canonicalRows = await db.select().from(submissions).where(eq(submissions.projectRecordId, row.airtableRecordId));
   const plan = planSubmissionReconciliation(sourceRows, canonicalRows);
   const collapseIds = new Set(plan.collapseSubmissionIds);
 
   const pendingConflictRows = await db.select().from(conflicts).where(eq(conflicts.projectRecordId, pendingReference));
-  const canonicalConflictRows = pendingConflictRows.length === 0
-    ? []
-    : await db.select().from(conflicts).where(eq(conflicts.projectRecordId, row.airtableRecordId));
+  const canonicalConflictRows = await db.select().from(conflicts).where(eq(conflicts.projectRecordId, row.airtableRecordId));
   for (const pendingConflict of pendingConflictRows) {
     const collides = canonicalConflictRows.some((candidate) => (
       candidate.cycleId === pendingConflict.cycleId
