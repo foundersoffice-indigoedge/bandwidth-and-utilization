@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockSelect, mockUpdate, mockUpdateReturning, mockReconcileCompletedPendingProject } = vi.hoisted(() => ({
+const { mockSelect, mockSet, mockUpdate, mockUpdateReturning, mockReconcileCompletedPendingProject } = vi.hoisted(() => ({
   mockSelect: vi.fn(),
+  mockSet: vi.fn(),
   mockUpdate: vi.fn(),
   mockUpdateReturning: vi.fn(),
   mockReconcileCompletedPendingProject: vi.fn(),
@@ -11,7 +12,9 @@ vi.mock('@/lib/db', () => ({
   db: {
     select: () => ({ from: () => ({ innerJoin: () => ({ where: () => ({ orderBy: mockSelect, limit: mockSelect }) }), where: () => ({ orderBy: mockSelect, limit: mockSelect }) }) }),
     update: () => ({
-      set: () => ({
+      set: (...setArgs: unknown[]) => {
+        mockSet(...setArgs);
+        return ({
         where: (...args: unknown[]) => {
           // The where() result must be both: (a) directly awaitable for routes
           // that use `await db.update(...).set(...).where(...)` and (b) chainable
@@ -22,7 +25,8 @@ vi.mock('@/lib/db', () => ({
             mockUpdateReturning;
           return builder;
         },
-      }),
+      });
+      },
     }),
   },
 }));
@@ -45,6 +49,7 @@ const SECRET = 'test-secret-xyz';
 beforeEach(() => {
   process.env.BT_INTEGRATION_SECRET = SECRET;
   mockSelect.mockReset();
+  mockSet.mockReset();
   mockUpdate.mockReset();
   mockUpdateReturning.mockReset();
   mockReconcileCompletedPendingProject.mockReset();
@@ -210,6 +215,131 @@ describe('POST finish', () => {
       { params }
     );
     expect(res.status).toBe(409);
+  });
+
+  it('transitions confirming -> finished with rejected', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
+    mockUpdateReturning.mockResolvedValueOnce([{ id: 'u1' }]);
+    const res = await postFinish(
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ resolution: 'rejected' }) }),
+      { params }
+    );
+    expect(res.status).toBe(200);
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'finished',
+      resolution: 'rejected',
+    }));
+    expect(mockReconcileCompletedPendingProject).not.toHaveBeenCalled();
+  });
+
+  it('allows a guarded rejected finish from confirming without an Airtable record', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', airtableRecordId: null }]);
+    mockUpdateReturning.mockResolvedValueOnce([{ id: 'u1' }]);
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'rejected', expectedStatus: 'confirming' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'finished',
+      resolution: 'rejected',
+    }));
+  });
+
+  it('keeps a guarded rejected finish idempotent after the row is already withdrawn', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'finished', resolution: 'rejected', airtableRecordId: null }]);
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'rejected', expectedStatus: 'confirming' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(200);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when guarded rejection finds an Airtable record', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', airtableRecordId: 'recA' }]);
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'rejected', expectedStatus: 'confirming' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when guarded rejection finds a different status', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'awaiting_setup', airtableRecordId: null }]);
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'rejected', expectedStatus: 'confirming' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for an unsupported expected status', async () => {
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'rejected', expectedStatus: 'pending' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(400);
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when expectedStatus is used with completed', async () => {
+    const res = await postFinish(
+      new Request('http://x', {
+        method: 'POST',
+        headers: auth.headers,
+        body: JSON.stringify({ resolution: 'completed', expectedStatus: 'confirming' }),
+      }),
+      { params }
+    );
+    expect(res.status).toBe(400);
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the confirming row changes before rejection is written', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
+    mockUpdateReturning.mockResolvedValueOnce([]);
+    const res = await postFinish(
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ resolution: 'rejected' }) }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockReconcileCompletedPendingProject).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when completing directly from confirming', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
+    const res = await postFinish(
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ resolution: 'completed' }) }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockReconcileCompletedPendingProject).not.toHaveBeenCalled();
   });
 });
 
