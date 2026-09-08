@@ -44,6 +44,7 @@ import { POST as postAwaitingSetup } from '../src/app/api/admin/pending-projects
 import { POST as postFinish } from '../src/app/api/admin/pending-projects/[id]/finish/route';
 import { POST as postConfirming } from '../src/app/api/admin/pending-projects/[id]/confirming/route';
 import { GET as getById } from '../src/app/api/admin/pending-projects/[id]/route';
+import { GET as getReconciliation } from '../src/app/api/admin/pending-projects/reconciliation/route';
 import { PendingProjectReconciliationHold } from '../src/lib/pending-project-reconciliation';
 
 const SECRET = 'test-secret-xyz';
@@ -136,13 +137,24 @@ describe('POST awaiting-setup', () => {
     expect(res.status).toBe(404);
   });
 
-  it('transitions pending -> awaiting_setup', async () => {
-    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'pending', airtableRecordId: null }]);
+  it('records the Airtable project for the worker that owns the confirming claim', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', airtableRecordId: null, processingClaimId: 'claim-1' }]);
+    mockUpdateReturning.mockResolvedValueOnce([{ id: 'u1' }]);
     const res = await postAwaitingSetup(
-      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ airtableRecordId: 'recA' }) }),
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ airtableRecordId: 'recA', processingClaimId: 'claim-1' }) }),
       { params }
     );
     expect(res.status).toBe(200);
+  });
+
+  it('refuses a result from a worker whose claim was replaced', async () => {
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', airtableRecordId: null, processingClaimId: 'new-claim' }]);
+    const res = await postAwaitingSetup(
+      new Request('http://x', { method: 'POST', headers: auth.headers, body: JSON.stringify({ airtableRecordId: 'recA', processingClaimId: 'old-claim' }) }),
+      { params }
+    );
+    expect(res.status).toBe(409);
+    expect(mockUpdateReturning).not.toHaveBeenCalled();
   });
 
   it('is idempotent for same airtableRecordId', async () => {
@@ -397,12 +409,13 @@ describe('POST confirming', () => {
       { params }
     );
     expect(res.status).toBe(200);
+    expect((await res.json()).claimId).toEqual(expect.any(String));
   });
 
   it('returns 409 when already confirming (claimed by another worker)', async () => {
     // Atomic UPDATE matches 0 rows, fallback SELECT shows confirming
     mockUpdateReturning.mockResolvedValueOnce([]);
-    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming' }]);
+    mockSelect.mockResolvedValueOnce([{ id: 'u1', status: 'confirming', processingClaimedAt: new Date() }]);
     const res = await postConfirming(
       new Request('http://x', { method: 'POST', headers: auth.headers }),
       { params }
@@ -418,6 +431,29 @@ describe('POST confirming', () => {
       { params }
     );
     expect(res.status).toBe(409);
+  });
+});
+
+describe('GET reconciliation inventory', () => {
+  it('returns 401 without integration auth', async () => {
+    const res = await getReconciliation(new Request('http://x'));
+    expect(res.status).toBe(401);
+  });
+
+  it('includes pending, confirming, and awaiting-setup rows with expired-claim state', async () => {
+    mockSelect.mockResolvedValueOnce([
+      { id: 'u1', status: 'pending', processingClaimedAt: null },
+      { id: 'u2', status: 'confirming', processingClaimedAt: new Date(Date.now() - 700_000) },
+      { id: 'u3', status: 'awaiting_setup', processingClaimedAt: null },
+    ]);
+
+    const res = await getReconciliation(new Request('http://x', auth));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.rows).toHaveLength(3);
+    expect(body.rows.find((row: { id: string }) => row.id === 'u2')).toMatchObject({ leaseExpired: true });
+    expect(body.rows.find((row: { id: string }) => row.id === 'u3')).toMatchObject({ leaseExpired: false });
   });
 });
 

@@ -159,6 +159,12 @@ export const pendingProjects = pgTable('pending_projects', {
   resolvedAt: timestamp('resolved_at'),
   /** Set only after every pending_ reference and frozen snapshot has been reconciled. */
   referencesReconciledAt: timestamp('references_reconciled_at'),
+  processingClaimId: text('processing_claim_id'),
+  processingClaimedAt: timestamp('processing_claimed_at'),
+  processingStep: text('processing_step'),
+  processingProgress: jsonb('processing_progress').$type<Array<{ step: string; completedAt: string; detail?: string }>>().notNull().default(sql`'[]'::jsonb`),
+  processingError: text('processing_error'),
+  processingUpdatedAt: timestamp('processing_updated_at'),
 });
 
 export const conflictRemindersSent = pgTable('conflict_reminders_sent', {

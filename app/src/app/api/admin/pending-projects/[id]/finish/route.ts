@@ -25,6 +25,7 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     resolution?: Resolution;
     expectedStatus?: ExpectedStatus;
+    expectedClaimId?: string;
   } | null;
   if (!body?.resolution || (body.resolution !== 'completed' && body.resolution !== 'rejected')) {
     return NextResponse.json(
@@ -75,6 +76,9 @@ export async function POST(
       { status: 409 }
     );
   }
+  if (body.expectedClaimId && row.processingClaimId !== body.expectedClaimId) {
+    return NextResponse.json({ error: 'This processing claim no longer owns the row' }, { status: 409 });
+  }
 
   const canRejectConfirming = row.status === 'confirming' && body.resolution === 'rejected';
   if (row.status !== 'awaiting_setup' && !canRejectConfirming) {
@@ -86,7 +90,11 @@ export async function POST(
 
   if (body.resolution === 'rejected') {
     const statusGuard = body.expectedStatus
-      ? and(eq(pendingProjects.status, body.expectedStatus), isNull(pendingProjects.airtableRecordId))
+      ? and(
+          eq(pendingProjects.status, body.expectedStatus),
+          isNull(pendingProjects.airtableRecordId),
+          ...(body.expectedClaimId ? [eq(pendingProjects.processingClaimId, body.expectedClaimId)] : []),
+        )
       : eq(pendingProjects.status, row.status);
     const [updated] = await db
       .update(pendingProjects)
