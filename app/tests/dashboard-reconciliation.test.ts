@@ -7,13 +7,13 @@ import {
 describe('formatExcludedProjectsNotice', () => {
   it('uses singular wording for one excluded project', () => {
     expect(formatExcludedProjectsNotice(1)).toBe(
-      '1 submitted project was excluded because its Airtable stage or team assignment changed after submission.',
+      '1 project entry was excluded by an older report. Its submitted hours remain in the underlying record.',
     );
   });
 
   it('uses plural wording for multiple excluded projects', () => {
     expect(formatExcludedProjectsNotice(2)).toBe(
-      '2 submitted projects were excluded because their Airtable stage or team assignment changed after submission.',
+      '2 project entries were excluded by an older report. Their submitted hours remain in the underlying records.',
     );
   });
 });

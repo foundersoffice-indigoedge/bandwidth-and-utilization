@@ -36,6 +36,11 @@ export async function GET(
       createdAt: pendingProjects.createdAt,
       status: pendingProjects.status,
       airtableRecordId: pendingProjects.airtableRecordId,
+      airtableProjectName: pendingProjects.airtableProjectName,
+      processingClaimId: pendingProjects.processingClaimId,
+      processingStep: pendingProjects.processingStep,
+      processingProgress: pendingProjects.processingProgress,
+      processingError: pendingProjects.processingError,
       cycleStartDate: cycles.startDate,
     })
     .from(pendingProjects)

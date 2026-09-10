@@ -27,7 +27,7 @@ describe('buildReconciledUtilization', () => {
     )).toBeNull();
   });
 
-  it('preserves a submitted fellow at zero when every project is excluded', () => {
+  it('preserves submitted work when the project is no longer active', () => {
     const result = buildReconciledUtilization(
       [sub('recInactive', 60)],
       activeProjects,
@@ -36,15 +36,12 @@ describe('buildReconciledUtilization', () => {
     );
 
     expect(result).toMatchObject({
-      totalHoursPerWeek: 0,
-      hoursUtilizationPct: 0,
-      loadTag: 'Free',
-      excludedProjectCount: 1,
-      submissions: [],
+      totalHoursPerWeek: 60,
+      excludedProjectCount: 0,
     });
   });
 
-  it('calculates load from surviving projects and counts exclusions', () => {
+  it('calculates load from every submitted project', () => {
     const result = buildReconciledUtilization(
       [sub('recActive', 26), sub('recInactive', 60)],
       activeProjects,
@@ -52,11 +49,11 @@ describe('buildReconciledUtilization', () => {
       'Associate 1',
     );
 
-    expect(result?.submissions.map(s => s.projectRecordId)).toEqual(['recActive']);
-    expect(result?.totalHoursPerWeek).toBe(26);
-    expect(result?.hoursUtilizationPct).toBeCloseTo(26 / 84, 4);
-    expect(result?.loadTag).toBe('Comfortable');
-    expect(result?.excludedProjectCount).toBe(1);
+    expect(result?.submissions.map(s => s.projectRecordId)).toEqual(['recActive', 'recInactive']);
+    expect(result?.totalHoursPerWeek).toBe(86);
+    expect(result?.hoursUtilizationPct).toBeCloseTo(86 / 84, 4);
+    expect(result?.loadTag).toBe('Overloaded');
+    expect(result?.excludedProjectCount).toBe(0);
   });
 
   it('falls back to canonical weekly hours when hoursPerWeek is null', () => {

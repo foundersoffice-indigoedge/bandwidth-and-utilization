@@ -112,44 +112,30 @@ export function getProjectsForFellow(
   );
 }
 
-/** The submissions retained by live reconciliation and the number excluded. */
+/** The submitted work retained for reporting. */
 export interface LiveReconciliation<T> {
   submissions: T[];
   excludedProjectCount: number;
 }
 
 /**
- * Reconcile a fellow's self-reports for the CURRENT cycle's live views (peer email, live
- * dashboard, and the snapshot frozen at finalization). A self-report is kept only when:
- *   - it's a mid-cycle "pending_" project (a deliberate add — always kept), or
- *   - its project is one `getProjectsForFellow` currently returns, i.e. still at an active
- *     stage AND the fellow is still on its team.
- * This drops rows (and their hours) for projects that were deleted, moved to an inactive
- * stage, or that the fellow was reassigned off of after submitting.
- *
- * IMPORTANT: apply this to the LIVE cycle only. Historical cycles (past snapshots, the
- * project drill-down) must keep their submissions as recorded — people really did spend
- * that time on those projects when the cycle ran, even if the project is now gone.
- *
- * `activeProjects` must be the active-stage set from `fetchAllProjects()` (already
- * stage-filtered), so a project absent from it is treated as deleted/inactive.
+ * A saved self-report is retrospective evidence of work done in that cycle. Current
+ * Airtable stage and team membership control future collection, but they cannot erase a
+ * report that has already been submitted. Corrections continue to update the saved row
+ * through the existing conflict-resolution path.
  */
 export function reconcileLiveSelfReports<T extends { projectRecordId: string }>(
   selfReports: T[],
-  activeProjects: ProjectAssignment[],
-  fellowRecordId: string,
-  fellowDesignation: string
+  _activeProjects: ProjectAssignment[],
+  _fellowRecordId: string,
+  _fellowDesignation: string
 ): LiveReconciliation<T> {
-  const onIds = new Set(
-    getProjectsForFellow(activeProjects, fellowRecordId, fellowDesignation).map(p => p.projectRecordId)
-  );
-  const submissions = selfReports.filter(
-    s => s.projectRecordId.startsWith('pending_') || onIds.has(s.projectRecordId)
-  );
-
+  void _activeProjects;
+  void _fellowRecordId;
+  void _fellowDesignation;
   return {
-    submissions,
-    excludedProjectCount: selfReports.length - submissions.length,
+    submissions: selfReports,
+    excludedProjectCount: 0,
   };
 }
 

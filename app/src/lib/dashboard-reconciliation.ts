@@ -1,8 +1,8 @@
 export function formatExcludedProjectsNotice(count: number): string {
   if (count === 1) {
-    return '1 submitted project was excluded because its Airtable stage or team assignment changed after submission.';
+    return '1 project entry was excluded by an older report. Its submitted hours remain in the underlying record.';
   }
-  return `${count} submitted projects were excluded because their Airtable stage or team assignment changed after submission.`;
+  return `${count} project entries were excluded by an older report. Their submitted hours remain in the underlying records.`;
 }
 
 export function findSubmissionRemarks(

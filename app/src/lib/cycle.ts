@@ -322,7 +322,31 @@ async function finalizeCycle(
     .from(submissions)
     .where(eq(submissions.cycleId, cycleId));
 
-  const fellows = preflightContext?.fellows ?? await fetchEligibleFellows();
+  const currentFellows = preflightContext?.fellows ?? await fetchEligibleFellows();
+  const cycleTokens = await db
+    .select()
+    .from(tokens)
+    .where(eq(tokens.cycleId, cycleId));
+  const currentById = new Map(currentFellows.map(fellow => [fellow.recordId, fellow]));
+  const tokenById = new Map(cycleTokens.map(token => [token.fellowRecordId, token]));
+  const reportingFellowIds = new Set([
+    ...currentFellows.map(fellow => fellow.recordId),
+    ...allSubmissions.filter(submission => submission.isSelfReport).map(submission => submission.fellowRecordId),
+  ]);
+  const fellows = [...reportingFellowIds].map(recordId => {
+    const recorded = tokenById.get(recordId);
+    if (recorded) {
+      return {
+        recordId,
+        name: recorded.fellowName,
+        email: recorded.fellowEmail,
+        designation: recorded.fellowDesignation,
+      };
+    }
+    const current = currentById.get(recordId);
+    if (current) return current;
+    throw new Error(`Submitted work for ${recordId} has no cycle identity record`);
+  });
   const allProjects = preflightContext?.allProjects ?? await fetchAllProjects();
   const projectMap = new Map(allProjects.map(p => [p.projectRecordId, p]));
 
@@ -331,11 +355,8 @@ async function finalizeCycle(
   const fellowSummaries: FellowSummary[] = [];
 
   for (const fellow of fellows) {
-    // Reconcile before freezing the snapshot: drop self-reports whose project is deleted,
-    // now at an inactive stage, or that the fellow was reassigned off of. Pending projects
-    // are kept. The snapshot is this cycle's permanent utilization record, so the totals and
-    // breakdown must exclude orphaned rows. (Applies to the live cycle being finalized only —
-    // past snapshots are already frozen and untouched.)
+    // Freeze the submitted work as reported for this cycle. A later Airtable stage or team
+    // change controls future collection and must not remove work already done.
     const rawSelfReports = allSubmissions.filter(
       submission => submission.fellowRecordId === fellow.recordId && submission.isSelfReport,
     );

@@ -126,9 +126,8 @@ export function assemblePeerBandwidthData(
   const fellowLoads = new Map<string, FellowLoad>();
 
   for (const fellow of fellows) {
-    // Live-cycle reconciliation: drop self-reports whose project is deleted, now at an
-    // inactive stage, or that this fellow has been reassigned off of. Pending mid-cycle
-    // projects are kept. History is never filtered this way.
+    // Submitted work remains part of this cycle even if Airtable later closes the project
+    // or changes its team. Airtable membership controls the next collection cycle only.
     const selfSubs = filterLiveSelfReports(
       allSubmissions.filter(s => s.isSelfReport && s.fellowRecordId === fellow.recordId),
       allProjects,

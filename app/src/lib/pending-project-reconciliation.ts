@@ -234,7 +234,8 @@ function snapshotFingerprint(rows: SnapshotRow[]): string {
 }
 
 function assertPendingCanBeCompleted(row: PendingProjectRow): asserts row is PendingProjectRow & { airtableRecordId: string } {
-  if (row.status !== 'awaiting_setup') {
+  const historicalCompleted = row.status === 'finished' && row.resolution === 'completed';
+  if (row.status !== 'awaiting_setup' && !historicalCompleted) {
     throw new PendingProjectReconciliationHold(`Cannot reconcile a pending project from status=${row.status}.`);
   }
   if (!row.airtableRecordId) {
@@ -247,6 +248,7 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
     return { promotedSubmissions: 0, collapsedDuplicates: 0, updatedConflicts: 0, repairedSnapshots: 0 };
   }
   assertPendingCanBeCompleted(row);
+  const expectedStatus = row.status;
 
   const pendingReference = `pending_${row.id}`;
   // Awaiting rows created before the additive migration can still complete.
@@ -313,7 +315,8 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
     tx`SELECT 1 / CASE WHEN EXISTS (
       SELECT 1 FROM pending_projects
       WHERE id = ${row.id}
-        AND status = 'awaiting_setup'
+        AND status = ${expectedStatus}
+        AND (${expectedStatus} <> 'finished' OR resolution = 'completed')
         AND airtable_record_id = ${row.airtableRecordId}
         AND COALESCE(airtable_project_name, name) = ${canonicalProjectName}
         AND references_reconciled_at IS NULL
@@ -377,9 +380,10 @@ export async function reconcileCompletedPendingProject(row: PendingProjectRow): 
     `),
     tx`
       UPDATE pending_projects
-      SET status = 'finished', resolution = 'completed', resolved_at = now(), references_reconciled_at = now()
+      SET status = 'finished', resolution = 'completed', resolved_at = COALESCE(resolved_at, now()), references_reconciled_at = now()
       WHERE id = ${row.id}
-        AND status = 'awaiting_setup'
+        AND status = ${expectedStatus}
+        AND (${expectedStatus} <> 'finished' OR resolution = 'completed')
         AND references_reconciled_at IS NULL
     `,
       ];

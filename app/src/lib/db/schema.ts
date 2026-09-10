@@ -140,6 +140,25 @@ export const snapshots = pgTable('snapshots', {
   excludedProjectCount: integer('excluded_project_count').notNull().default(0),
 });
 
+/** Immutable before/after evidence for a corrected weekly workload report. */
+export const snapshotRevisions = pgTable('snapshot_revisions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  snapshotId: uuid('snapshot_id').references(() => snapshots.id).notNull(),
+  reason: text('reason').notNull(),
+  oldProjectBreakdown: jsonb('old_project_breakdown').$type<ProjectBreakdownItem[]>().notNull(),
+  oldTotalHoursPerWeek: real('old_total_hours_per_week'),
+  oldHoursUtilizationPct: real('old_hours_utilization_pct'),
+  oldHoursLoadTag: text('old_hours_load_tag'),
+  oldExcludedProjectCount: integer('old_excluded_project_count').notNull(),
+  newProjectBreakdown: jsonb('new_project_breakdown').$type<ProjectBreakdownItem[]>().notNull(),
+  newTotalHoursPerWeek: real('new_total_hours_per_week').notNull(),
+  newHoursUtilizationPct: real('new_hours_utilization_pct').notNull(),
+  newHoursLoadTag: text('new_hours_load_tag').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, table => [
+  uniqueIndex('snapshot_revisions_snapshot_reason_unique').on(table.snapshotId, table.reason),
+]);
+
 export const pendingProjects = pgTable('pending_projects', {
   id: uuid('id').defaultRandom().primaryKey(),
   cycleId: uuid('cycle_id').references(() => cycles.id).notNull(),

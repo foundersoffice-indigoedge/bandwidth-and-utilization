@@ -284,11 +284,13 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .flatMap(m => m.teammates)
       .filter(t => t.recordId === 'recVP')
       .flatMap(t => t.projects);
-    // The stale/deleted project is dropped from the live email entirely; the mid-cycle
-    // pending project stays, with no false label.
+    // Both submitted rows remain visible. Airtable cannot prove the historical role for
+    // either row, so neither receives an associate-role label.
     const pending = vpProjects.find(p => p.projectRecordId === 'pending_abc');
     const stale = vpProjects.find(p => p.projectRecordId === 'recStaleXYZ');
-    expect(stale).toBeUndefined();
+    expect(stale).toBeDefined();
+    expect(stale!.hoursPerWeek).toBe(3);
+    expect(stale!.performedRoleLabel).toBeNull();
     expect(pending).toBeDefined();
     expect(pending!.performedRoleLabel).toBeNull();
   });
@@ -319,8 +321,10 @@ describe('assemblePeerBandwidthData — performed-role label', () => {
       .filter(t => t.recordId === 'recMurali')
       .flatMap(t => t.projects)
       .find(p => p.projectRecordId === 'recPlatinum');
-    // Murali was swapped off the team mid-cycle, so his stale row is dropped from the live
-    // email entirely (not merely unlabeled).
-    expect(platinumRow).toBeUndefined();
+    // Murali's submitted row remains in the report, while the current team cannot be used
+    // to infer that he performed an associate role in the historical cycle.
+    expect(platinumRow).toBeDefined();
+    expect(platinumRow!.hoursPerWeek).toBe(0);
+    expect(platinumRow!.performedRoleLabel).toBeNull();
   });
 });

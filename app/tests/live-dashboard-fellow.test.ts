@@ -5,7 +5,7 @@ import type { ProjectAssignment } from '../src/types';
 const activeProjects: ProjectAssignment[] = [];
 
 describe('buildLiveDashboardFellow', () => {
-  it('keeps raw remarks while excluding the project from reconciled submissions', () => {
+  it('keeps submitted work and remarks after the Airtable project changes', () => {
     const result = buildLiveDashboardFellow(
       [{
         projectRecordId: 'recExcluded',
@@ -20,11 +20,9 @@ describe('buildLiveDashboardFellow', () => {
 
     expect(result).not.toBeNull();
     expect(result).toMatchObject({
-      submissions: [],
-      excludedProjectCount: 1,
-      totalHoursPerWeek: 0,
-      hoursUtilizationPct: 0,
-      loadTag: 'Free',
+      submissions: [expect.objectContaining({ projectRecordId: 'recExcluded' })],
+      excludedProjectCount: 0,
+      totalHoursPerWeek: 60,
       remarks: 'Follow up on sector outreach',
     });
   });
