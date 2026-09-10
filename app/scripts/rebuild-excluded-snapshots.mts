@@ -1,12 +1,20 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, asc, eq, gt } from 'drizzle-orm';
 import { db, getSql } from '../src/lib/db/index';
 import { snapshots, submissions } from '../src/lib/db/schema';
 import { rebuildHistoricalSnapshot } from '../src/lib/historical-snapshot-repair';
 
 const APPLY = process.argv.includes('--apply');
 const REASON = '2026-09-10-preserve-submitted-work';
+const limitArgument = process.argv.find(argument => argument.startsWith('--limit='));
+const parsedLimit = limitArgument ? Number(limitArgument.slice('--limit='.length)) : null;
+if (parsedLimit !== null && (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100)) {
+  throw new Error('--limit must be an integer between 1 and 100');
+}
 
-const affected = await db.select().from(snapshots).where(gt(snapshots.excludedProjectCount, 0));
+const affectedQuery = db.select().from(snapshots)
+  .where(gt(snapshots.excludedProjectCount, 0))
+  .orderBy(asc(snapshots.snapshotDate), asc(snapshots.id));
+const affected = parsedLimit === null ? await affectedQuery : await affectedQuery.limit(parsedLimit);
 const plans = [];
 
 for (const snapshot of affected) {
