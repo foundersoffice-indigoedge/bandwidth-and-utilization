@@ -11,3 +11,11 @@ Check-in obligations come from Airtable's Check in Cycles records, including VP/
 `GET /api/cron/submission-status` requires the existing cron bearer secret. `?preview=true` returns the report without sending or writing. The schedule is 03:45 UTC, with a 03:50 UTC retry. The delivery log freezes the first email payload and records the provider message ID; retries reuse the same daily key and body. A successful send isn't repeated. A provider failure stays retryable.
 
 Apply the additive daily_submission_reports migration before deployment. The table stores email payloads and delivery receipts only; it doesn't change any submission records. To disable these emails, remove the two submission-status cron entries and redeploy.
+
+## Inbox identification and release verification
+
+Sender: `bandwidth@indigoedge.com`. Recipient: `ajder@indigoedge.com`. Subjects use `Bandwidth: N awaiting submission | cycle YYYY-MM-DD`, with `previous cycle` on the rollout-day summary. A complete cohort uses `all required forms submitted`; incomplete source data uses `cycle data needs attention` or `submission status needs checking`.
+
+The first scheduled attempt is 9:15 am IST. Inbox arrival depends on email delivery; a failed send gets a 9:20 am retry. The message records its observation time. Verification messages begin `[Test]` and should be excluded from inbox-monitoring summaries.
+
+Application release `e9dccba` was deployed as `dpl_EDkcdCfh6c69Mq7pM4CvFsnuq8Lc`. Verified: 21 targeted tests, scoped lint, production build, migration columns, live authenticated preview, unauthenticated 401, both registered cron times, and test delivery to Ajder. The first natural daily run is due at 9:15 am IST on 16 September 2026.
