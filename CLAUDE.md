@@ -1,5 +1,13 @@
 # Utilization MIS
 
+## Daily missing-response email (16 September 2026)
+
+At 9:15 am IST every day, `bandwidth@indigoedge.com` emails only `ajder@indigoedge.com`. The subject starts `Bandwidth:` and includes the pending count and cycle date. Missing respondents appear first, with names, roles, and email addresses. Other recipients appear below in a compact reference list.
+
+Monday reports the previous Monday-to-Sunday cycle. Other days report the current cycle. The production cycle's tokens define the cohort; `not_needed` is an exemption. Completed cycles remain readable. This daily snapshot is separate from Monday deadline-compliance classifications, peer reports, conflict resolution, and director sign-off.
+
+The authenticated `/api/cron/submission-status` endpoint runs at 03:45 UTC, with a 03:50 UTC retry. `?preview=true` is read-only. The additive `daily_submission_reports` table freezes each daily payload and stores its delivery receipt. Details: [daily-submission-status.md](app/docs/operations/daily-submission-status.md).
+
 Building a people-focused reporting layer that gives leadership persistent visibility into team capacity and workload at IndigoEdge.
 
 ## What This Is

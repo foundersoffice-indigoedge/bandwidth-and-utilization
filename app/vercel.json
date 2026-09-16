@@ -37,6 +37,14 @@
     {
       "path": "/api/cron/peer-email",
       "schedule": "30 3 * * 3"
+    },
+    {
+      "path": "/api/cron/submission-status",
+      "schedule": "45 3 * * *"
+    },
+    {
+      "path": "/api/cron/submission-status",
+      "schedule": "50 3 * * *"
     }
   ]
 }

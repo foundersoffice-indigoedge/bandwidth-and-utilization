@@ -1,7 +1,13 @@
 # Utilization MIS — Progress Tracker
 
+## Daily missing-response reporting (16 September 2026)
+
+Built the daily 9:15 am IST email to Ajder, with Monday previous-cycle summaries and missing respondents first. Applied migration `0016_daily_submission_reports.sql`. The release includes authenticated previews, stable daily delivery keys, a 9:20 am retry, empty/duplicate-cycle handling, and tests for exemptions and completed cycles.
+
+Validation: 21 targeted tests, scoped lint, production build, and live data preview. The preview reconciled 31 recipients with 1 pending response for the 14 September cycle. Deployment and first scheduled delivery are checked separately; see `app/docs/operations/daily-submission-status.md`.
+
 > Operational status of the project. Where we are, what's moving, what's next.
-> **Last updated:** 2026-09-02 (pending teammate submission fix shipped; Rubik backfilled)
+> **Last updated:** 2026-09-16 (daily missing-response reporting)
 
 ## Instructions for Claude
 

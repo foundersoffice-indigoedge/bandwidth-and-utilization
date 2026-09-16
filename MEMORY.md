@@ -1,7 +1,13 @@
 # Utilization MIS — Memory
 
+## Daily submission reporting decision (16 September 2026)
+
+Ajder requested 2 separate daily missing-response emails at 9:15 am IST, including weekends, sent only to his IE inbox. He confirmed that the rollout morning should summarize the previous cycle: Friday for project check-ins and Monday for bandwidth. All other mornings cover the current cycle.
+
+The main purpose is to identify who hasn't submitted. Completed responses belong in a compact secondary list. Ajder will give Instinct AI the sender, subject, timing, and cycle rules so it can surface missing respondents as the emails arrive. He explicitly authorized operating-doc updates without a separate sign-off.
+
 > Institutional memory of this project. Captures what we know, what we decided, and why.
-> **Last updated:** 2026-09-02 (pending teammate submissions made durable; Rubik repaired)
+> **Last updated:** 2026-09-16 (daily missing-response reporting)
 
 ## Instructions for Claude
 
